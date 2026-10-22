@@ -3,13 +3,12 @@ import { config } from './env';
 
 const sqlConfig: sql.config = {
     server: config.db.server,
-    user: config.db.user,
-    password: config.db.password,
     database: config.db.database,
     options: {
         trustServerCertificate: true,
         enableArithAbort: true,
-        instanceName: config.db.instanceName
+        instanceName: config.db.instanceName,
+        trustedConnection: config.db.trustedConnection
     },
     pool: {
         max: 20,
@@ -17,6 +16,12 @@ const sqlConfig: sql.config = {
         idleTimeoutMillis: 30000
     }
 };
+
+// Only add user/password if not using Windows Auth
+if (!config.db.trustedConnection && config.db.user) {
+    sqlConfig.user = config.db.user;
+    sqlConfig.password = config.db.password;
+}
 
 if (config.db.port && !config.db.instanceName) {
     sqlConfig.port = config.db.port;
