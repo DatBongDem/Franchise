@@ -192,6 +192,22 @@ const swaggerDocument = {
                 responses: { 200: { description: 'Order ID or false' } }
             }
         },
+        '/api/order/{orderId}/finish-cooking': {
+            put: {
+                summary: 'Finish cooking an order (KITCHENSTAFF)',
+                description: 'Marks the order and its product batches Cooked. Manufacture and expiry use Vietnam time, matching FranchiseStore.',
+                tags: ['Orders'],
+                parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: {
+                    200: { description: 'Order has finished cooking.' },
+                    400: { description: 'Invalid order ID' },
+                    401: { description: 'Authentication required' },
+                    403: { description: 'KITCHENSTAFF role required' },
+                    404: { description: 'Order not found' },
+                    500: { description: 'An error occurred while finishing cooking the order.' }
+                }
+            }
+        },
         '/api/delivery': {
             get: {
                 summary: 'Get Orders Available for Delivery Coordinator',
