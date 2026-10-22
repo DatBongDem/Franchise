@@ -34,7 +34,8 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
         }) as any;
 
         req.user = {
-            id: decoded.sub || decoded.id,
+            id: decoded.sub || decoded.id || decoded.nameid
+                || decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'],
             email: decoded.email,
             name: decoded.name,
             idStore: decoded.IdStore || decoded.idStore,

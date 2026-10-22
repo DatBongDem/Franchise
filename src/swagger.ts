@@ -54,13 +54,6 @@ const swaggerDocument = {
                 }
             }
         },
-        '/api/users/me': {
-            get: {
-                summary: 'Get Current Authenticated User Profile',
-                tags: ['Users'],
-                responses: { 200: { description: 'Profile details' } }
-            }
-        },
         '/api/users': {
             get: {
                 summary: 'Get All Users (ADMIN, MANAGER)',
@@ -462,6 +455,19 @@ const swaggerDocument = {
                     401: { description: 'Authentication required' },
                     403: { description: 'ADMIN role required' },
                     404: { description: 'User not found or invalid GUID route' },
+                    500: { description: 'An internal error occurred.' }
+                }
+            }
+        },
+        '/api/users/me': {
+            get: {
+                summary: 'Get current authenticated user',
+                description: 'Returns the C# UserDto shape using the user ID from the verified token.',
+                tags: ['Users'],
+                responses: {
+                    200: { description: 'Current user profile' },
+                    401: { description: 'Authentication required or user ID missing/invalid in token' },
+                    404: { description: 'User not found.' },
                     500: { description: 'An internal error occurred.' }
                 }
             }
