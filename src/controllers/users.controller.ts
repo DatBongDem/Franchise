@@ -80,13 +80,29 @@ export class UsersController {
     }
 
     static async getById(req: Request, res: Response): Promise<void> {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+            res.status(404).send();
+            return;
+        }
         try {
             const user = await UserService.getUserById(req.params.id);
             if (!user) {
-                res.status(404).json({ message: 'User not found.' });
+                res.status(404).send();
                 return;
             }
-            res.json(user);
+            res.json({
+                id: user.Id,
+                gmail: user.Gmail,
+                name: user.Name,
+                gender: user.Gender,
+                dateOfBirth: user.DateOfBirth,
+                address: user.Address,
+                phoneNumber: user.PhoneNumber,
+                role: user.Role,
+                idStore: user.IdStore,
+                avatar: user.Avatar,
+                status: user.Status
+            });
         } catch (error) {
             res.status(500).json({ message: 'An internal error occurred.' });
         }

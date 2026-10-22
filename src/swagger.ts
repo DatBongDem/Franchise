@@ -472,6 +472,21 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/users/{id}': {
+            get: {
+                summary: 'Get user by ID (ADMIN, MANAGER)',
+                description: 'Returns the C# UserDto shape without password data.',
+                tags: ['Users'],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: {
+                    200: { description: 'User profile' },
+                    401: { description: 'Authentication required' },
+                    403: { description: 'ADMIN or MANAGER role required' },
+                    404: { description: 'User not found or invalid GUID route' },
+                    500: { description: 'An internal error occurred.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',
