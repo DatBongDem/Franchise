@@ -444,8 +444,20 @@ const swaggerDocument = {
         '/api/recipe': {
             get: {
                 summary: 'Get All Recipes',
+                description: 'Returns the C# Recipe shape without loading the ingredient navigation collection.',
                 tags: ['Recipes'],
-                responses: { 200: { description: 'List of recipes' } }
+                security: [],
+                responses: {
+                    200: { description: 'List of recipes; empty array when none exist', content: { 'application/json': { schema: {
+                        type: 'array', items: { type: 'object', properties: {
+                            recipeID: { type: 'string', format: 'uuid' },
+                            productID: { type: 'string', format: 'uuid' },
+                            description: { type: 'string' },
+                            recipeIngredients: { type: 'array', items: { type: 'object' } }
+                        } }
+                    } } } },
+                    500: { description: 'An internal error occurred.' }
+                }
             }
         },
         '/api/quantitative': {
