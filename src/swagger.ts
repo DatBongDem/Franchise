@@ -387,8 +387,23 @@ const swaggerDocument = {
         '/api/quantitative': {
             get: {
                 summary: 'Get Quantitatives for Store',
+                description: 'Uses only the store in the authenticated token. Includes rules for soft-deleted products and uses Unknown Product when a product is missing, matching FranchiseStore.',
                 tags: ['Quantitative'],
-                responses: { 200: { description: 'List of quantitatives' } }
+                responses: {
+                    200: {
+                        description: 'List of quantitative rules; empty array when none exist',
+                        content: { 'application/json': { schema: { type: 'array', items: {
+                            type: 'object', properties: {
+                                storeId: { type: 'string', format: 'uuid' },
+                                productId: { type: 'string', format: 'uuid' },
+                                productName: { type: 'string' },
+                                quantity: { type: 'integer' }
+                            }
+                        } } } }
+                    },
+                    401: { description: 'Authentication or valid token store required' },
+                    500: { description: 'An unexpected error occurred.' }
+                }
             }
         }
     }
