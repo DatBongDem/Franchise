@@ -309,6 +309,23 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/quantitative/{productId}': {
+            put: {
+                summary: 'Update an existing quantitative rule for the token store',
+                tags: ['Quantitative'],
+                parameters: [{ name: 'productId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: {
+                    type: 'object', required: ['quantity'], properties: { quantity: { type: 'integer', minimum: 1, maximum: 2147483647 } }
+                } } } },
+                responses: {
+                    204: { description: 'Quantitative rule updated' },
+                    400: { description: 'Invalid product ID or quantity' },
+                    401: { description: 'Authentication or valid token store required' },
+                    404: { description: 'Quantitative rule not found for the specified product and store.' },
+                    500: { description: 'An unexpected error occurred.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',

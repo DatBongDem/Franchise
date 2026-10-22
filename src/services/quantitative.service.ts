@@ -25,12 +25,7 @@ export class QuantitativeService {
         );
 
         if (!existing) {
-            // If doesn't exist yet, insert
-            await execute(
-                'INSERT INTO Quantitatives (StoreId, ProductId, Quantity) VALUES (@storeId, @productId, @quantity)',
-                { storeId, productId, quantity }
-            );
-            return true;
+            return false;
         }
 
         await execute(
