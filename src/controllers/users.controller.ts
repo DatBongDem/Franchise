@@ -116,13 +116,21 @@ export class UsersController {
     }
 
     static async toggleStatus(req: Request, res: Response): Promise<void> {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+            // The C# {id:guid} route does not match an invalid ID.
+            res.status(404).send();
+            return;
+        }
         try {
             const newStatus = await UserService.toggleUserStatus(req.params.id);
             if (!newStatus) {
-                res.status(404).json({ message: 'User not found.' });
+                res.status(404).send();
                 return;
             }
-            res.json({ status: newStatus });
+            res.json({
+                message: newStatus === 'Blocked' ? 'Account has been blocked.' : 'Account has been recovered.',
+                status: newStatus
+            });
         } catch (error) {
             res.status(500).json({ message: 'An internal error occurred.' });
         }
