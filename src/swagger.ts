@@ -368,6 +368,28 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/recipe/{id}': {
+            get: {
+                summary: 'Get recipe by ID',
+                description: 'Returns the C# Recipe shape. recipeIngredients is empty because this endpoint does not load the navigation collection.',
+                tags: ['Recipes'],
+                security: [],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: {
+                    200: { description: 'Recipe', content: { 'application/json': { schema: {
+                        type: 'object', properties: {
+                            recipeID: { type: 'string', format: 'uuid' },
+                            productID: { type: 'string', format: 'uuid' },
+                            description: { type: 'string' },
+                            recipeIngredients: { type: 'array', items: { type: 'object' } }
+                        }
+                    } } } },
+                    204: { description: 'Recipe not found (C# Ok(null))' },
+                    400: { description: 'Invalid recipe ID' },
+                    500: { description: 'An internal error occurred.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',

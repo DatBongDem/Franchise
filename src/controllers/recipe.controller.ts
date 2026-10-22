@@ -12,10 +12,14 @@ export class RecipeController {
     }
 
     static async getById(req: Request, res: Response): Promise<void> {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+            res.status(400).json({ message: 'Invalid recipe ID.' });
+            return;
+        }
         try {
-            const recipe = await RecipeService.getById(req.params.id);
+            const recipe = await RecipeService.getRecipeById(req.params.id);
             if (!recipe) {
-                res.status(404).json({ message: 'Recipe not found' });
+                res.status(204).send();
                 return;
             }
             res.json(recipe);
