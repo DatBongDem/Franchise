@@ -47,11 +47,46 @@ export class RecipeController {
     }
 
     static async create(req: Request, res: Response): Promise<void> {
+        // ASP.NET binds DTO properties case-insensitively and defaults value types.
+        const field = (value: any, name: string): any => value && typeof value === 'object'
+            ? value[Object.keys(value).find(key => key.toLowerCase() === name.toLowerCase()) ?? name] : undefined;
+        const guid = (value: any): string | null => {
+            if (value === undefined) return '00000000-0000-0000-0000-000000000000';
+            return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+                ? value.toLowerCase() : null;
+        };
+        const body = req.body;
+        const productId = guid(field(body, 'productId'));
+        const description = field(body, 'description');
+        const rawIngredients = field(body, 'ingredients');
+        const ingredients = rawIngredients === undefined ? [] : rawIngredients;
+        if (!body || Array.isArray(body) || !productId || typeof description !== 'string' || !Array.isArray(ingredients)) {
+            res.status(400).json({ message: 'Invalid recipe data.' });
+            return;
+        }
+        const normalizedIngredients = [];
+        for (const item of ingredients) {
+            const ingredientID = guid(field(item, 'ingredientID'));
+            const rawQuantity = field(item, 'quantity');
+            const quantity = rawQuantity === undefined ? 0 : typeof rawQuantity === 'number' ? rawQuantity
+                : typeof rawQuantity === 'string' && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(rawQuantity)
+                    ? Number(rawQuantity) : NaN;
+            if (!item || typeof item !== 'object' || Array.isArray(item) || !ingredientID
+                || !Number.isFinite(quantity) || Math.abs(quantity) > 7.922816251426433e28) {
+                res.status(400).json({ message: 'Invalid recipe ingredient data.' });
+                return;
+            }
+            normalizedIngredients.push({ IngredientID: ingredientID, Quantity: quantity });
+        }
         try {
-            const recipe = await RecipeService.create(req.body);
-            res.status(201).json(recipe);
+            const recipe = await RecipeService.create({ ProductId: productId, Description: description, Ingredients: normalizedIngredients });
+            res.location(`${req.baseUrl}/${recipe.RecipeID}`).status(201).json({
+                productId,
+                description,
+                ingredients: normalizedIngredients.map(item => ({ ingredientID: item.IngredientID, quantity: item.Quantity }))
+            });
         } catch (error: any) {
-            res.status(400).json({ message: error.message });
+            res.status(500).json({ message: error.message });
         }
     }
 

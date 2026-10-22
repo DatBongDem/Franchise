@@ -30,7 +30,7 @@ export class RecipeService {
         };
     }
 
-    // The read endpoint uses RecipeResponseDto; create currently uses the richer helper below.
+    // The read endpoint uses RecipeResponseDto.
     static async getDetailsById(id: string): Promise<any | null> {
         const recipe = await queryOne('SELECT RecipeID, Description FROM Recipes WHERE RecipeID = @id', { id });
         if (!recipe) return null;
@@ -103,6 +103,18 @@ export class RecipeService {
             throw new Error('Recipe must have at least one ingredient');
         }
 
+        const ingredientIds = dto.Ingredients.map(item => item.IngredientID.toLowerCase());
+        if (new Set(ingredientIds).size !== ingredientIds.length) {
+            throw new Error('Duplicate ingredient detected');
+        }
+        // Match C#: validate every ingredient before inserting the recipe or its details.
+        for (const item of dto.Ingredients) {
+            const ingredient = await queryOne('SELECT IngredientId FROM Ingredients WHERE IngredientId = @id', {
+                id: item.IngredientID
+            });
+            if (!ingredient) throw new Error(`Ingredient with ID ${item.IngredientID} not found`);
+        }
+
         const recipeId = uuidv4();
         await execute(
             `INSERT INTO Recipes (RecipeID, ProductID, Description)
@@ -110,7 +122,7 @@ export class RecipeService {
             {
                 recipeId,
                 productId: dto.ProductId,
-                description: dto.Description || ''
+                description: dto.Description
             }
         );
 
@@ -126,7 +138,7 @@ export class RecipeService {
             );
         }
 
-        return await this.getWithIngredientsById(recipeId);
+        return { RecipeID: recipeId };
     }
 
     static async update(id: string, dto: RecipeDto): Promise<boolean> {

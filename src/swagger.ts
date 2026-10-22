@@ -545,6 +545,28 @@ const swaggerDocument = {
             }
         },
         '/api/recipe': {
+            post: {
+                summary: 'Create a recipe with ingredients',
+                description: 'Matches C#: rejects an existing product recipe, duplicate ingredients and missing ingredients before writing. Returns the submitted DTO with a Location header. Business/service exceptions return 500.',
+                tags: ['Recipes'],
+                security: [],
+                requestBody: { required: true, content: { 'application/json': { schema: {
+                    type: 'object', required: ['description'], properties: {
+                        productId: { type: 'string', format: 'uuid' },
+                        description: { type: 'string' },
+                        ingredients: { type: 'array', items: { type: 'object', properties: {
+                            ingredientID: { type: 'string', format: 'uuid' }, quantity: { type: 'number' }
+                        } } }
+                    }
+                } } } },
+                responses: {
+                    201: { description: 'Recipe created; response contains productId, description and ingredients', headers: {
+                        Location: { description: 'URL of the created recipe', schema: { type: 'string' } }
+                    } },
+                    400: { description: 'Invalid DTO or field format' },
+                    500: { description: 'Duplicate recipe, empty/duplicate/missing ingredients, or database error' }
+                }
+            },
             get: {
                 summary: 'Get All Recipes',
                 description: 'Returns the C# Recipe shape without loading the ingredient navigation collection.',
