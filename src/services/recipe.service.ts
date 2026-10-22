@@ -45,11 +45,14 @@ export class RecipeService {
     }
 
     static async getAll(): Promise<any[]> {
-        return await query(
-            `SELECT r.*, p.ProductName
-             FROM Recipes r
-             LEFT JOIN Products p ON r.ProductID = p.ProductId`
-        );
+        const recipes = await query('SELECT RecipeID, ProductID, Description FROM Recipes');
+        return recipes.map(recipe => ({
+            recipeID: recipe.RecipeID,
+            productID: recipe.ProductID,
+            description: recipe.Description,
+            // GetAllAsync does not Include the C# navigation collection.
+            recipeIngredients: []
+        }));
     }
 
     static async getById(id: string): Promise<any | null> {
