@@ -10,6 +10,7 @@ router.get('/', authMiddleware, authorizeRoles(Roles.SUPPLYCOORDINATOR, Roles.KI
 router.put('/:orderId/pickup', authMiddleware, authorizeRoles(Roles.SUPPLYCOORDINATOR), DeliveryController.pickUpOrder);
 router.put('/:orderId/send-to-kitchen', authMiddleware, authorizeRoles(Roles.SUPPLYCOORDINATOR), DeliveryController.sendToKitchen);
 router.put('/:orderId/take-from-kitchen', authMiddleware, authorizeRoles(Roles.SUPPLYCOORDINATOR), DeliveryController.takeFromKitchen);
-router.put('/:orderId/arrive-at-store', authMiddleware, DeliveryController.arriveAtStore);
+// C# ArriveAtStore has no Authorize attribute on the action or controller.
+router.put('/:orderId/arrive-at-store', DeliveryController.arriveAtStore);
 
 export default router;

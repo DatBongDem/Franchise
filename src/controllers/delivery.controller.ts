@@ -86,11 +86,26 @@ export class DeliveryController {
     }
 
     static async arriveAtStore(req: Request, res: Response): Promise<void> {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.orderId)) {
+            res.status(400).json({ message: 'Invalid order ID.' });
+            return;
+        }
         try {
             await OrderService.arriveAtStore(req.params.orderId);
             res.json({ message: 'Order has arrived at the store successfully.' });
         } catch (error: any) {
-            res.status(400).json({ message: error.message });
+            if (error instanceof OrderNotFoundError) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
+            if (error instanceof OrderInvalidStateError) {
+                res.status(400).json({ message: error.message });
+                return;
+            }
+            res.status(500).json({
+                message: 'An error occurred while marking the order as arrived.',
+                error: error.message
+            });
         }
     }
 }
