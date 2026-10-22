@@ -4,6 +4,7 @@ import { StatusEnum } from '../constants/status.enum';
 
 export class OrderNotFoundError extends Error {}
 export class OrderInvalidStateError extends Error {}
+export class OrderHistoryAccessError extends Error {}
 
 export class OrderService {
     static async getCreatingOrderIdForStore(storeId: string): Promise<string | null> {
@@ -299,15 +300,52 @@ export class OrderService {
         return await this.getOrderById(orderId);
     }
 
-    static async getOrdersHistoryAtStore(userId: string, storeId: string, pageNumber: number = 1, pageSize: number = 10): Promise<{ orders: any[]; totalRecords: number }> {
+    static async getOrdersHistoryAtStore(
+        userId: string, storeId: string, pageNumber: number = 1, pageSize: number = 10,
+        fromDate?: Date, toDate?: Date
+    ): Promise<{ orders: any[]; totalRecords: number }> {
+        const user = await queryOne('SELECT Id, Role, IdStore FROM Users WHERE Id = @userId', { userId });
+        if (!user) throw new OrderNotFoundError('User not found');
+        if (user.Role !== 'MANAGER' || user.IdStore?.toLowerCase() !== storeId.toLowerCase()) {
+            throw new OrderHistoryAccessError('User does not have permission!!!');
+        }
+        let predicate = 'StoreId = @storeId';
+        const filters: Record<string, any> = { storeId };
+        if (fromDate) { predicate += ' AND SentTime >= @fromDate'; filters.fromDate = fromDate; }
+        if (toDate) { predicate += ' AND SentTime <= @toDate'; filters.toDate = toDate; }
         const offset = (pageNumber - 1) * pageSize;
-        const total = await queryOne('SELECT COUNT(*) AS count FROM Orders WHERE StoreId = @storeId', { storeId });
-        const orders = await query(
-            `SELECT * FROM Orders WHERE StoreId = @storeId ORDER BY SentTime DESC
+        const total = await queryOne(`SELECT COUNT(*) AS count FROM Orders WHERE ${predicate}`, filters);
+        const orders = pageSize === 0 ? [] : await query(
+            `SELECT OrderId, UserId, SentTime, TotalAmount, Status FROM Orders WHERE ${predicate} ORDER BY SentTime DESC
              OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY`,
-            { storeId, offset, pageSize }
+            { ...filters, offset, pageSize }
         );
-        return { orders, totalRecords: total?.count || 0 };
+        if (orders.length === 0) return { orders: [], totalRecords: total?.count ?? 0 };
+        const batches = await query(
+            `SELECT pb.OrderId, pb.ProductId, p.ProductName, pb.BatchId, pb.QualityOrder, pb.Price
+             FROM ProductBatches pb
+             JOIN Products p ON pb.ProductId = p.ProductId
+             WHERE pb.OrderId IN (SELECT OrderId FROM OPENJSON(@orderIds) WITH (OrderId uniqueidentifier '$'))`,
+            { orderIds: JSON.stringify(orders.map(order => order.OrderId)) }
+        );
+        const detailsByOrder = new Map<string, any[]>();
+        for (const batch of batches) {
+            const key = batch.OrderId.toLowerCase();
+            const details = detailsByOrder.get(key) ?? [];
+            details.push({
+                productId: batch.ProductId, productName: batch.ProductName, batchId: batch.BatchId,
+                quantity: batch.QualityOrder, unitPrice: batch.Price
+            });
+            detailsByOrder.set(key, details);
+        }
+        return {
+            orders: orders.map(order => ({
+                orderId: order.OrderId, orderBy: order.UserId, createdTime: order.SentTime,
+                totalAmount: order.TotalAmount, status: order.Status,
+                details: detailsByOrder.get(order.OrderId.toLowerCase()) ?? []
+            })),
+            totalRecords: total?.count ?? 0
+        };
     }
 
     static async getCookingOrders(): Promise<any[]> {

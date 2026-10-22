@@ -1,15 +1,51 @@
 import { Request, Response } from 'express';
-import { OrderInvalidStateError, OrderNotFoundError, OrderService } from '../services/order.service';
+import { OrderHistoryAccessError, OrderInvalidStateError, OrderNotFoundError, OrderService } from '../services/order.service';
 
 export class OrderController {
     static async getOrdersHistoryStore(req: Request, res: Response): Promise<void> {
+        const isGuid = (value: unknown): value is string => typeof value === 'string'
+            && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+        const queryField = (name: string) => {
+            const key = Object.keys(req.query).find(key => key.toLowerCase() === name.toLowerCase());
+            return key === undefined ? undefined : req.query[key];
+        };
+        const integer = (value: unknown, fallback: number): number => {
+            if (value === undefined) return fallback;
+            if (typeof value !== 'string' || !/^[+-]?\d+$/.test(value)) return NaN;
+            const number = Number(value);
+            return number >= -2147483648 && number <= 2147483647 ? number : NaN;
+        };
+        const date = (value: unknown): Date | undefined => {
+            if (value === undefined || value === '') return undefined;
+            if (typeof value !== 'string') throw new Error('Invalid date.');
+            // Preserve timezone-free SQL wall-clock values; explicit offsets are converted to UTC.
+            const parsed = new Date(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(value) ? `${value}Z` : value);
+            if (!Number.isFinite(parsed.getTime())) throw new Error('Invalid date.');
+            const calendar = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+            if (calendar) {
+                const check = new Date(`${calendar[0]}T00:00:00Z`);
+                if (check.getUTCFullYear() !== Number(calendar[1]) || check.getUTCMonth() + 1 !== Number(calendar[2])
+                    || check.getUTCDate() !== Number(calendar[3])) throw new Error('Invalid date.');
+            }
+            return parsed;
+        };
+        const storeId = req.params.storeId;
+        const pageNumber = integer(queryField('pageNumber'), 1);
+        const pageSize = integer(queryField('pageSize'), 10);
+        let fromDate: Date | undefined, toDate: Date | undefined;
+        try { fromDate = date(queryField('fromDate')); toDate = date(queryField('toDate')); }
+        catch { res.status(400).json({ message: 'Invalid date filter.' }); return; }
+        if (!isGuid(storeId) || !Number.isFinite(pageNumber) || !Number.isFinite(pageSize)) {
+            res.status(400).json({ message: 'Invalid store ID or pagination.' });
+            return;
+        }
         try {
             const userId = req.user?.id;
-            const storeId = req.params.storeId;
-            const pageNumber = parseInt(req.query.PageNumber as string || req.query.pageNumber as string || '1', 10);
-            const pageSize = parseInt(req.query.PageSize as string || req.query.pageSize as string || '10', 10);
-
-            const { orders, totalRecords } = await OrderService.getOrdersHistoryAtStore(userId!, storeId, pageNumber, pageSize);
+            if (!isGuid(userId)) {
+                res.status(403).json({ message: 'User ID not found in token.' });
+                return;
+            }
+            const { orders, totalRecords } = await OrderService.getOrdersHistoryAtStore(userId, storeId, pageNumber, pageSize, fromDate, toDate);
             res.json({
                 status: 0,
                 totalRecords,
@@ -19,7 +55,15 @@ export class OrderController {
                 message: orders.length > 0 ? 'Get Orders history successfully' : 'No Orders history found'
             });
         } catch (error: any) {
-            res.status(500).json({ message: 'An internal error occurred.', error: error.message });
+            if (error instanceof OrderHistoryAccessError) {
+                res.status(403).json({ message: error.message });
+                return;
+            }
+            if (error instanceof OrderNotFoundError) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
+            res.status(500).json('An internal error occurred.');
         }
     }
 
