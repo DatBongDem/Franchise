@@ -390,6 +390,26 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/stores/{id}': {
+            get: {
+                summary: 'Get store by ID',
+                description: 'Returns the C# StoreDto shape. Also available at /api/store/{id}.',
+                tags: ['Stores'],
+                security: [],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: {
+                    200: { description: 'StoreDto', content: { 'application/json': { schema: {
+                        type: 'object', properties: {
+                            storeId: { type: 'string', format: 'uuid' },
+                            storeName: { type: 'string' },
+                            address: { type: 'string', nullable: true },
+                            status: { type: 'boolean' }
+                        }
+                    } } } },
+                    400: { description: 'Invalid store ID, store not found, or lookup failed' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',
