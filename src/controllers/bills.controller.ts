@@ -1,0 +1,134 @@
+import { Request, Response } from 'express';
+import { BillingService } from '../services/billing.service';
+
+export class BillsController {
+    static async createBill(req: Request, res: Response): Promise<void> {
+        try {
+            const userId = req.user?.id;
+            const storeId = req.user?.idStore;
+
+            if (!userId || !storeId) {
+                res.status(401).json({ message: 'User ID or Store ID not found in token.' });
+                return;
+            }
+
+            const { items, Items, note, Note } = req.body;
+            const billItems = items || Items;
+
+            if (!billItems || !Array.isArray(billItems) || billItems.length === 0) {
+                res.status(400).json({ message: 'Bill must contain at least one item.' });
+                return;
+            }
+
+            const formattedItems = billItems.map((i: any) => ({
+                ProductId: i.productId || i.ProductId,
+                Quantity: parseInt(i.quantity || i.Quantity, 10)
+            }));
+
+            const billId = await BillingService.createBill(
+                userId,
+                storeId,
+                formattedItems,
+                note || Note
+            );
+
+            res.json({ BillId: billId });
+        } catch (error: any) {
+            console.error('[BillsController.createBill] Error:', error.message);
+            if (error.message.includes('Insufficient stock')) {
+                res.status(422).json({ message: error.message });
+            } else if (error.message.includes('not found')) {
+                res.status(404).json({ message: error.message });
+            } else {
+                res.status(500).json({ message: 'An unexpected error occurred', error: error.message });
+            }
+        }
+    }
+
+    static async printBill(req: Request, res: Response): Promise<void> {
+        try {
+            const bill = await BillingService.getBillPrint(req.params.id);
+            if (!bill) {
+                res.status(404).json({ message: 'Bill not found' });
+                return;
+            }
+            res.json(bill);
+        } catch (error) {
+            res.status(500).json({ message: 'An internal error occurred.' });
+        }
+    }
+
+    static async getBillingsHistoryStore(req: Request, res: Response): Promise<void> {
+        try {
+            const storeId = req.params.storeId;
+            const pageNumber = parseInt(req.query.PageNumber as string || req.query.pageNumber as string || '1', 10);
+            const pageSize = parseInt(req.query.PageSize as string || req.query.pageSize as string || '10', 10);
+            const fromDate = req.query.FromDate as string || req.query.fromDate as string;
+            const toDate = req.query.ToDate as string || req.query.toDate as string;
+
+            const { listBills, totalRecords } = await BillingService.getBillingHistoryAtStore(
+                storeId,
+                pageNumber,
+                pageSize,
+                fromDate,
+                toDate
+            );
+
+            res.json({
+                status: 0,
+                totalRecords,
+                pageNumber,
+                pageSize,
+                data: listBills,
+                message: listBills.length > 0 ? 'Get bills history successfully' : 'No billing history found'
+            });
+        } catch (error: any) {
+            res.status(500).json({ message: 'An internal error occurred.', error: error.message });
+        }
+    }
+
+    static async getStoreRevenue(req: Request, res: Response): Promise<void> {
+        try {
+            const storeId = req.params.storeId;
+            const date = req.query.Date as string || req.query.date as string;
+            const endDate = req.query.EndDate as string || req.query.endDate as string;
+
+            if (!date) {
+                res.status(400).json({ message: 'Date is required' });
+                return;
+            }
+
+            const result = await BillingService.getStoreRevenue(storeId, date, endDate);
+            res.json({
+                status: 0,
+                data: result,
+                message: 'Get store revenue successfully'
+            });
+        } catch (error: any) {
+            res.status(400).json({ message: error.message });
+        }
+    }
+
+    static async getBillingHistory(req: Request, res: Response): Promise<void> {
+        try {
+            const userId = req.user?.id;
+            if (!userId) {
+                res.status(401).json({ message: 'User ID not found in token.' });
+                return;
+            }
+
+            const pageNumber = parseInt(req.query.PageNumber as string || req.query.pageNumber as string || '1', 10);
+            const pageSize = parseInt(req.query.PageSize as string || req.query.pageSize as string || '10', 10);
+
+            const { listBills, totalRecords } = await BillingService.getBillingHistoryByStaff(userId, pageNumber, pageSize);
+            res.json({
+                TotalRecords: totalRecords,
+                PageNumber: pageNumber,
+                PageSize: pageSize,
+                Data: listBills
+            });
+        } catch (error: any) {
+            res.status(500).json({ message: error.message });
+        }
+    }
+}
