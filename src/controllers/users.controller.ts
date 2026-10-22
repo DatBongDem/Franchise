@@ -40,7 +40,8 @@ export class UsersController {
 
     static async getMe(req: Request, res: Response): Promise<void> {
         try {
-            if (!req.user) {
+            if (!req.user || typeof req.user.id !== 'string'
+                || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.user.id)) {
                 res.status(401).json({ message: 'User ID not found in token.' });
                 return;
             }
@@ -51,7 +52,19 @@ export class UsersController {
                 return;
             }
 
-            res.json(user);
+            res.json({
+                id: user.Id,
+                gmail: user.Gmail,
+                name: user.Name,
+                gender: user.Gender,
+                dateOfBirth: user.DateOfBirth,
+                address: user.Address,
+                phoneNumber: user.PhoneNumber,
+                role: user.Role,
+                idStore: user.IdStore,
+                avatar: user.Avatar,
+                status: user.Status
+            });
         } catch (error) {
             res.status(500).json({ message: 'An internal error occurred.' });
         }
