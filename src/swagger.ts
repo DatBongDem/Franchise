@@ -97,8 +97,20 @@ const swaggerDocument = {
         '/api/stores': {
             get: {
                 summary: 'Get All Stores',
+                description: 'Public endpoint matching the C# StoreDto list, including inactive stores. Also available at /api/store.',
                 tags: ['Stores'],
-                responses: { 200: { description: 'List of stores' } }
+                security: [],
+                responses: {
+                    200: { description: 'StoreDto list; empty array when none exist', content: { 'application/json': { schema: {
+                        type: 'array', items: { type: 'object', properties: {
+                            storeId: { type: 'string', format: 'uuid' },
+                            storeName: { type: 'string' },
+                            address: { type: 'string', nullable: true },
+                            status: { type: 'boolean' }
+                        } }
+                    } } } },
+                    400: { description: 'Store lookup failed' }
+                }
             },
             post: {
                 summary: 'Create store and initial Creating order',
