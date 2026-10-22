@@ -304,17 +304,70 @@ export class OrderService {
     }
 
     static async getCookingOrders(): Promise<any[]> {
-        return await query(
-            `SELECT o.*, s.StoreName
+        const statuses = {
+            s1: StatusEnum.WaitingForCooking,
+            s2: StatusEnum.Cooking,
+            s3: StatusEnum.Cooked
+        };
+        const orders = await query(
+            `SELECT o.OrderId, o.UserId, o.StoreId, o.TotalAmount, o.Status,
+                    o.Type, o.Note, o.SentTime, o.PickedUpTime, o.KitchenReceivedTime,
+                    o.CookingTime, o.CookedTime, o.TakenFromKitchenTime, o.ArrivedTime,
+                    o.CompletedTime, o.CancelledTime, o.Feedback
              FROM Orders o
-             JOIN Stores s ON o.StoreId = s.StoreId
              WHERE o.Status IN (@s1, @s2, @s3)
              ORDER BY o.SentTime ASC`,
-            {
-                s1: StatusEnum.WaitingForCooking,
-                s2: StatusEnum.Cooking,
-                s3: StatusEnum.Cooked
-            }
+            statuses
         );
+        if (orders.length === 0) return [];
+
+        // Load details in one query; C# includes batches even for soft-deleted products.
+        const batches = await query(
+            `SELECT pb.OrderId, pb.BatchId, pb.ProductId, p.ProductName, pb.Price,
+                    p.Unit, pb.QualityOrder, pb.Status, pb.Manufacture, pb.Expiry
+             FROM ProductBatches pb
+             JOIN Products p ON pb.ProductId = p.ProductId
+             JOIN Orders o ON pb.OrderId = o.OrderId
+             WHERE o.Status IN (@s1, @s2, @s3)`,
+            statuses
+        );
+        const batchesByOrder = new Map<string, any[]>();
+        for (const batch of batches) {
+            const key = batch.OrderId.toLowerCase();
+            const details = batchesByOrder.get(key) ?? [];
+            details.push({
+                batchId: batch.BatchId,
+                productId: batch.ProductId,
+                productName: batch.ProductName,
+                price: batch.Price,
+                unit: batch.Unit,
+                qualityOrder: batch.QualityOrder,
+                status: batch.Status,
+                manufacture: batch.Manufacture,
+                expiry: batch.Expiry
+            });
+            batchesByOrder.set(key, details);
+        }
+        // ASP.NET Core serializes OrderWithBatchesDto with camelCase property names.
+        return orders.map(order => ({
+            orderId: order.OrderId,
+            userId: order.UserId,
+            storeId: order.StoreId,
+            totalAmount: order.TotalAmount,
+            status: order.Status,
+            type: order.Type,
+            note: order.Note,
+            sentTime: order.SentTime,
+            pickedUpTime: order.PickedUpTime,
+            kitchenReceivedTime: order.KitchenReceivedTime,
+            cookingTime: order.CookingTime,
+            cookedTime: order.CookedTime,
+            takenFromKitchenTime: order.TakenFromKitchenTime,
+            arrivedTime: order.ArrivedTime,
+            completedTime: order.CompletedTime,
+            cancelledTime: order.CancelledTime,
+            feedback: order.Feedback,
+            productBatches: batchesByOrder.get(order.OrderId.toLowerCase()) ?? []
+        }));
     }
 }

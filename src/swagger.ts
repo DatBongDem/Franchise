@@ -185,6 +185,18 @@ const swaggerDocument = {
                 responses: { 200: { description: 'List of orders' } }
             }
         },
+        '/api/order/orders': {
+            get: {
+                summary: 'Get kitchen orders with product batch details',
+                description: 'Returns WaitingForCooking, Cooking and Cooked orders with productBatches, matching the C# OrderWithBatchesDto. Requires authentication.',
+                tags: ['Orders'],
+                responses: {
+                    200: { description: 'Kitchen orders with batch/product details; empty array when none exist' },
+                    401: { description: 'Authentication required' },
+                    500: { description: 'An error occurred while retrieving kitchen orders.' }
+                }
+            }
+        },
         '/api/order/check-creating': {
             get: {
                 summary: 'Check if current store has creating order',
