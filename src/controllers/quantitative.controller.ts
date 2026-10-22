@@ -18,15 +18,26 @@ export class QuantitativeController {
     }
 
     static async updateQuantitative(req: Request, res: Response): Promise<void> {
+        const isGuid = (value: unknown): value is string => typeof value === 'string'
+            && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+        if (!isGuid(req.params.productId)) {
+            res.status(400).json({ message: 'Invalid product ID.' });
+            return;
+        }
+        const rawQuantity = req.body?.quantity ?? req.body?.Quantity;
+        // ASP.NET's web JSON defaults also allow integer values quoted as strings.
+        const qty = typeof rawQuantity === 'number' ? rawQuantity
+            : typeof rawQuantity === 'string' && /^-?\d+$/.test(rawQuantity) ? Number(rawQuantity) : NaN;
+        if (!Number.isInteger(qty) || qty < 1 || qty > 2147483647) {
+            res.status(400).json({ message: 'Quantity must be a positive number.' });
+            return;
+        }
         try {
-            const storeId = req.body.storeId || req.query.storeId as string || req.user?.idStore;
-            if (!storeId) {
+            const storeId = req.user?.idStore;
+            if (!isGuid(storeId)) {
                 res.status(401).json({ message: 'Store ID not found or invalid in token.' });
                 return;
             }
-
-            const { quantity, Quantity } = req.body;
-            const qty = parseInt(quantity ?? Quantity ?? 0, 10);
 
             const success = await QuantitativeService.update(storeId, req.params.productId, qty);
             if (!success) {
