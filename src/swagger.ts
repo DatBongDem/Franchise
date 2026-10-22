@@ -290,6 +290,25 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/order/{orderId}/complete': {
+            put: {
+                summary: 'Complete an arrived order (STORESTAFF)',
+                description: 'Changes Arrived to Completed, records Vietnam time and saves optional feedback. Product batches are unchanged, matching FranchiseStore.',
+                tags: ['Orders'],
+                parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: {
+                    type: 'object', properties: { feedback: { type: 'string', nullable: true } }
+                } } } },
+                responses: {
+                    200: { description: 'Order marked as completed successfully.' },
+                    400: { description: 'Invalid input or order is not Arrived' },
+                    401: { description: 'Authentication required' },
+                    403: { description: 'STORESTAFF role required' },
+                    404: { description: 'Order not found' },
+                    500: { description: 'An error occurred while completing the order.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',

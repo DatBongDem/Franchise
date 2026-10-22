@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { OrderNotFoundError, OrderService } from '../services/order.service';
+import { OrderInvalidStateError, OrderNotFoundError, OrderService } from '../services/order.service';
 
 export class OrderController {
     static async getOrdersHistoryStore(req: Request, res: Response): Promise<void> {
@@ -91,11 +91,33 @@ export class OrderController {
     }
 
     static async completeOrder(req: Request, res: Response): Promise<void> {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.orderId)) {
+            res.status(400).json({ message: 'Invalid order ID.' });
+            return;
+        }
+        const body = req.body;
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+            res.status(400).json({ message: 'A request body is required.' });
+            return;
+        }
+        const feedback = body.feedback !== undefined ? body.feedback : body.Feedback;
+        if (feedback != null && typeof feedback !== 'string') {
+            res.status(400).json({ message: 'Feedback must be a string or null.' });
+            return;
+        }
         try {
-            await OrderService.completeOrder(req.params.orderId, req.body.Feedback || req.body.feedback);
-            res.json({ message: 'Order completed successfully' });
+            await OrderService.completeOrder(req.params.orderId, feedback);
+            res.json({ message: 'Order marked as completed successfully.' });
         } catch (error: any) {
-            res.status(400).json({ message: error.message });
+            if (error instanceof OrderNotFoundError) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
+            if (error instanceof OrderInvalidStateError) {
+                res.status(400).json({ message: error.message });
+                return;
+            }
+            res.status(500).json({ message: 'An error occurred while completing the order.', error: error.message });
         }
     }
 

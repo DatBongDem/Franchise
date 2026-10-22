@@ -260,23 +260,15 @@ export class OrderService {
 
     static async completeOrder(orderId: string, feedback?: string): Promise<void> {
         const order = await this.getOrderById(orderId);
-        if (!order) throw new Error(`Order with ID ${orderId} not found.`);
+        if (!order) throw new OrderNotFoundError(`Order with ID ${orderId} not found.`);
         if (order.Status !== StatusEnum.Arrived) {
-            throw new Error("Order status must be 'Arrived' to be marked as completed.");
+            throw new OrderInvalidStateError("Order status must be 'Arrived' to be marked as completed.");
         }
 
-        const now = new Date();
+        const now = new Date(Date.now() + 7 * 60 * 60 * 1000);
         await execute(
             `UPDATE Orders SET Status = @status, CompletedTime = @now, Feedback = @feedback WHERE OrderId = @orderId`,
-            { orderId, status: StatusEnum.Completed, now, feedback: feedback || null }
-        );
-
-        // Make batches available for sale in store
-        await execute(
-            `UPDATE ProductBatches
-             SET Status = @normalStatus, RemainingQuantity = QualityOrder
-             WHERE OrderId = @orderId`,
-            { orderId, normalStatus: StatusEnum.Normal }
+            { orderId, status: StatusEnum.Completed, now, feedback: feedback ?? null }
         );
     }
 
