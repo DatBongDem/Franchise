@@ -326,6 +326,28 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/recipe/{id}/with-ingredients': {
+            get: {
+                summary: 'Get recipe with ingredients',
+                tags: ['Recipes'],
+                security: [],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: {
+                    200: { description: 'RecipeResponseDto', content: { 'application/json': { schema: {
+                        type: 'object', properties: {
+                            recipeID: { type: 'string', format: 'uuid' },
+                            description: { type: 'string' },
+                            ingredients: { type: 'array', items: { type: 'object', properties: {
+                                ingredientID: { type: 'string', format: 'uuid' }, quantity: { type: 'number' }
+                            } } }
+                        }
+                    } } } },
+                    204: { description: 'Recipe not found (C# Ok(null))' },
+                    400: { description: 'Invalid recipe ID' },
+                    500: { description: 'An internal error occurred.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',

@@ -25,10 +25,15 @@ export class RecipeController {
     }
 
     static async getWithIngredientsById(req: Request, res: Response): Promise<void> {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+            res.status(400).json({ message: 'Invalid recipe ID.' });
+            return;
+        }
         try {
-            const recipe = await RecipeService.getWithIngredientsById(req.params.id);
+            const recipe = await RecipeService.getDetailsById(req.params.id);
             if (!recipe) {
-                res.status(404).json({ message: 'Recipe not found' });
+                // ASP.NET Core's default output formatter turns Ok(null) into 204.
+                res.status(204).send();
                 return;
             }
             res.json(recipe);

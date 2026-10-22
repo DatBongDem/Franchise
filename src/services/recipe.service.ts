@@ -16,6 +16,20 @@ export interface RecipeDto {
 }
 
 export class RecipeService {
+    // The read endpoint uses RecipeResponseDto; create currently uses the richer helper below.
+    static async getDetailsById(id: string): Promise<any | null> {
+        const recipe = await queryOne('SELECT RecipeID, Description FROM Recipes WHERE RecipeID = @id', { id });
+        if (!recipe) return null;
+        const ingredients = await query(
+            'SELECT IngredientId, Quantity FROM RecipeIngredients WHERE RecipeId = @id', { id }
+        );
+        return {
+            recipeID: recipe.RecipeID,
+            description: recipe.Description,
+            ingredients: ingredients.map(item => ({ ingredientID: item.IngredientId, quantity: item.Quantity }))
+        };
+    }
+
     static async getAll(): Promise<any[]> {
         return await query(
             `SELECT r.*, p.ProductName
