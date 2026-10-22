@@ -449,6 +449,23 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/users/{id}/toggle-status': {
+            put: {
+                summary: 'Block or recover a user account (ADMIN)',
+                description: 'Changes Active to Blocked; other existing statuses become Active, matching C#.',
+                tags: ['Users'],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: {
+                    200: { description: 'Account status changed', content: { 'application/json': { schema: {
+                        type: 'object', properties: { message: { type: 'string' }, status: { type: 'string', enum: ['Active', 'Blocked'] } }
+                    } } } },
+                    401: { description: 'Authentication required' },
+                    403: { description: 'ADMIN role required' },
+                    404: { description: 'User not found or invalid GUID route' },
+                    500: { description: 'An internal error occurred.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',
