@@ -32,19 +32,18 @@ export class IngredientService {
         return (await this.getById(id))!;
     }
 
-    static async update(id: string, dto: { IngredientName: string; Unit: string; Status?: string }): Promise<boolean> {
+    static async update(id: string, dto: { IngredientName: string; Unit: string }): Promise<boolean> {
         const item = await this.getById(id);
         if (!item) return false;
 
         await execute(
             `UPDATE Ingredients
-             SET IngredientName = @name, Unit = @unit, Status = @status
+             SET IngredientName = @name, Unit = @unit
              WHERE IngredientId = @id`,
             {
                 id,
                 name: dto.IngredientName,
-                unit: dto.Unit,
-                status: dto.Status || item.Status
+                unit: dto.Unit
             }
         );
         return true;

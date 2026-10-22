@@ -47,15 +47,25 @@ export class IngredientController {
     }
 
     static async update(req: Request, res: Response): Promise<void> {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+            // The C# route uses {id:guid}, so invalid IDs do not match it.
+            res.status(404).send();
+            return;
+        }
+        const body = req.body;
+        const name = body?.ingredientName ?? body?.IngredientName;
+        const unit = body?.unit ?? body?.Unit;
+        if (!body || Array.isArray(body) || typeof name !== 'string' || typeof unit !== 'string') {
+            res.status(400).json({ message: 'IngredientName and Unit must be provided as strings.' });
+            return;
+        }
         try {
-            const { ingredientName, IngredientName, unit, Unit, status, Status } = req.body;
             const success = await IngredientService.update(req.params.id, {
-                IngredientName: ingredientName || IngredientName,
-                Unit: unit || Unit,
-                Status: status || Status
+                IngredientName: name,
+                Unit: unit
             });
             if (!success) {
-                res.status(404).json({ message: 'Ingredient not found' });
+                res.status(404).send();
                 return;
             }
             res.json('Ingredient updated successfully');
