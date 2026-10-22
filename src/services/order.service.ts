@@ -150,52 +150,62 @@ export class OrderService {
 
     static async startCooking(orderId: string, userId: string): Promise<void> {
         const order = await this.getOrderById(orderId);
-        if (!order) throw new Error(`Order with ID ${orderId} not found.`);
-        if (order.Status !== StatusEnum.WaitingForCooking && order.Status !== StatusEnum.Cooking) {
-            throw new Error("Order status must be 'WaitingForCooking' to start cooking.");
+        if (!order) throw new OrderNotFoundError('Order not found.');
+        if (order.Status === StatusEnum.WaitingForCooking) {
+            await execute(
+                `UPDATE Orders SET Status = @status, CookingTime = @now WHERE OrderId = @orderId`,
+                { orderId, status: StatusEnum.Cooking, now: new Date(Date.now() + 7 * 60 * 60 * 1000) }
+            );
+        } else if (order.Status !== StatusEnum.Cooking) {
+            throw new OrderInvalidStateError('Order is not in cooking status.');
         }
 
-        const now = new Date();
-        await execute(
-            `UPDATE Orders SET Status = @status, CookingTime = @now WHERE OrderId = @orderId`,
-            { orderId, status: StatusEnum.Cooking, now }
-        );
-
-        // Update batches
-        await execute(
-            `UPDATE ProductBatches SET Status = @status WHERE OrderId = @orderId AND Status != @cookedStatus`,
-            { orderId, status: StatusEnum.Cooking, cookedStatus: StatusEnum.Cooked }
-        );
-
-        // Record cooking ingredient histories based on recipes
         const batches = await query('SELECT * FROM ProductBatches WHERE OrderId = @orderId', { orderId });
+        if (batches.length === 0) throw new OrderInvalidStateError('Order has no product batches.');
+        for (const batch of batches) {
+            if (batch.Status === StatusEnum.Cooked) continue;
+            await execute('UPDATE ProductBatches SET Status = @status WHERE BatchId = @batchId', {
+                batchId: batch.BatchId, status: StatusEnum.Cooking
+            });
+        }
+
+        // C# prepares every history before AddRangeAsync, so validation cannot leave partial histories.
+        const histories: any[] = [];
         for (const pb of batches) {
             const recipe = await queryOne('SELECT * FROM Recipes WHERE ProductID = @prodId', { prodId: pb.ProductId });
             if (recipe) {
                 const recipeIngredients = await query(
-                    `SELECT ri.*, i.Unit
+                    `SELECT ri.*, i.IngredientId AS ExistingIngredientId, i.Unit
                      FROM RecipeIngredients ri
-                     JOIN Ingredients i ON ri.IngredientId = i.IngredientId
+                     LEFT JOIN Ingredients i ON ri.IngredientId = i.IngredientId
                      WHERE ri.RecipeId = @recipeId`,
                     { recipeId: recipe.RecipeID }
                 );
 
                 for (const ri of recipeIngredients) {
-                    await execute(
-                        `INSERT INTO CookingIngredientHistories
-                         (CookingIngredientHistoryId, BatchId, ProductBatchBatchId, IngredientId, QuantityUsed, Unit, CreatedTime)
-                         VALUES (@id, @batchId, @batchId, @ingId, @qty, @unit, @now)`,
-                        {
-                            id: uuidv4(),
-                            batchId: pb.BatchId,
-                            ingId: ri.IngredientId,
-                            qty: ri.Quantity * pb.QualityOrder,
-                            unit: ri.Unit,
-                            now
-                        }
-                    );
+                    if (!ri.ExistingIngredientId) {
+                        throw new OrderInvalidStateError(`Data integrity issue: Ingredient with ID '${ri.IngredientId}' referenced in Recipe with ID '${recipe.RecipeID}' does not exist.`);
+                    }
+                    histories.push({
+                        id: uuidv4(), batchId: pb.BatchId, ingredientId: ri.IngredientId,
+                        quantityUsed: ri.Quantity * pb.QualityOrder, unit: ri.Unit,
+                        createdTime: new Date(Date.now()).toISOString()
+                    });
                 }
             }
+        }
+        if (histories.length > 0) {
+            // One statement preserves AddRange's atomic save without SQL's parameter-count limit.
+            await execute(
+                `INSERT INTO CookingIngredientHistories
+                 (CookingIngredientHistoryId, BatchId, IngredientId, QuantityUsed, Unit, CreatedTime)
+                 SELECT id, batchId, ingredientId, quantityUsed, unit, createdTime
+                 FROM OPENJSON(@histories) WITH (
+                     id uniqueidentifier, batchId uniqueidentifier, ingredientId uniqueidentifier,
+                     quantityUsed decimal(18,2), unit nvarchar(100), createdTime datetime2
+                 )`,
+                { histories: JSON.stringify(histories) }
+            );
         }
     }
 

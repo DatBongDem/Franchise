@@ -164,11 +164,30 @@ export class OrderController {
     }
 
     static async startCooking(req: Request, res: Response): Promise<void> {
+        const isGuid = (value: unknown): value is string => typeof value === 'string'
+            && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+        if (!isGuid(req.params.orderId)) {
+            res.status(400).json({ message: 'Invalid order ID.' });
+            return;
+        }
         try {
+            if (!req.user?.id) {
+                res.status(401).json('User ID not found in token.');
+                return;
+            }
+            if (!isGuid(req.user.id)) throw new Error('Unrecognized Guid format.');
             await OrderService.startCooking(req.params.orderId, req.user!.id);
             res.json({ message: 'Order has started cooking and ingredient history has been recorded.' });
         } catch (error: any) {
-            res.status(400).json({ message: error.message });
+            if (error instanceof OrderNotFoundError) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
+            if (error instanceof OrderInvalidStateError) {
+                res.status(400).json({ message: error.message });
+                return;
+            }
+            res.status(500).json({ message: 'An error occurred while starting to cook the order.', error: error.message });
         }
     }
 
