@@ -3,6 +3,7 @@ import { query, queryOne, execute } from '../config/db';
 import { StatusEnum } from '../constants/status.enum';
 
 export class OrderNotFoundError extends Error {}
+export class OrderInvalidStateError extends Error {}
 
 export class OrderService {
     static async getCreatingOrderIdForStore(storeId: string): Promise<string | null> {
@@ -121,14 +122,15 @@ export class OrderService {
 
     static async pickUpOrder(orderId: string): Promise<void> {
         const order = await this.getOrderById(orderId);
-        if (!order) throw new Error(`Order with ID ${orderId} not found.`);
+        if (!order) throw new OrderNotFoundError(`Order with ID ${orderId} not found.`);
         if (order.Status !== StatusEnum.Pending) {
-            throw new Error('Order status must be Pending to pick up.');
+            throw new OrderInvalidStateError('Order status is not suitable for pickup.');
         }
 
         await execute(
             `UPDATE Orders SET Status = @status, PickedUpTime = @now WHERE OrderId = @orderId`,
-            { orderId, status: StatusEnum.PickedUp, now: new Date() }
+            // Match the Vietnam wall-clock time C# stores in SQL DATETIME2.
+            { orderId, status: StatusEnum.PickedUp, now: new Date(Date.now() + 7 * 60 * 60 * 1000) }
         );
     }
 

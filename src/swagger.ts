@@ -227,6 +227,22 @@ const swaggerDocument = {
                 responses: { 200: { description: 'Orders list' } }
             }
         },
+        '/api/delivery/{orderId}/pickup': {
+            put: {
+                summary: 'Pick up a pending order (SUPPLYCOORDINATOR)',
+                description: 'Changes Pending to PickedUp and records the pickup time in Vietnam time, matching FranchiseStore.',
+                tags: ['Delivery'],
+                parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: {
+                    200: { description: 'Order picked up successfully.' },
+                    400: { description: 'Invalid order ID or order status is not suitable for pickup.' },
+                    401: { description: 'Authentication required' },
+                    403: { description: 'SUPPLYCOORDINATOR role required' },
+                    404: { description: 'Order not found' },
+                    500: { description: 'An error occurred while picking up the order.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',
