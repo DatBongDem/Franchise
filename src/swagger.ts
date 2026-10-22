@@ -259,6 +259,22 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/delivery/{orderId}/take-from-kitchen': {
+            put: {
+                summary: 'Take a cooked order from the kitchen (SUPPLYCOORDINATOR)',
+                description: 'Changes Cooked to TakenFrom and records TakenFromKitchenTime in Vietnam time, matching FranchiseStore.',
+                tags: ['Delivery'],
+                parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: {
+                    200: { description: 'Order taken from kitchen successfully.' },
+                    400: { description: 'Invalid order ID or order is not Cooked' },
+                    401: { description: 'Authentication required' },
+                    403: { description: 'SUPPLYCOORDINATOR role required' },
+                    404: { description: 'Order not found' },
+                    500: { description: 'An error occurred while taking the order from the kitchen.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',
