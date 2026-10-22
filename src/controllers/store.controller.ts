@@ -88,15 +88,19 @@ export class StoreController {
     }
 
     static async delete(req: Request, res: Response): Promise<void> {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+            res.status(400).json({ message: 'Invalid store ID.' });
+            return;
+        }
         try {
             const success = await StoreService.delete(req.params.id);
             if (!success) {
-                res.status(404).json({ message: 'Store not found' });
+                res.status(400).json(`Not found Store with Id: ${req.params.id}`);
                 return;
             }
-            res.json({ message: 'Store deleted successfully.' });
-        } catch (error) {
-            res.status(500).json({ message: 'An internal error occurred.' });
+            res.json('Delete store successfully');
+        } catch (error: any) {
+            res.status(400).json(error.message);
         }
     }
 }

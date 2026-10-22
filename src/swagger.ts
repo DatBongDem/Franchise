@@ -403,6 +403,17 @@ const swaggerDocument = {
             }
         },
         '/api/stores/{id}': {
+            delete: {
+                summary: 'Delete store by ID',
+                description: 'Public endpoint matching C# store deletion. Also available at /api/store/{id}.',
+                tags: ['Stores'],
+                security: [],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: {
+                    200: { description: 'Delete store successfully' },
+                    400: { description: 'Invalid store ID, store not found, or deletion failed' }
+                }
+            },
             put: {
                 summary: 'Update store name and address',
                 description: 'Matches C# UpdateStoreDto. A null or omitted address clears the address. Also available at /api/store/{id}.',
