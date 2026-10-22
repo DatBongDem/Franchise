@@ -16,6 +16,20 @@ export interface RecipeDto {
 }
 
 export class RecipeService {
+    static async getRecipeById(id: string): Promise<any | null> {
+        const recipe = await queryOne(
+            'SELECT RecipeID, ProductID, Description FROM Recipes WHERE RecipeID = @id', { id }
+        );
+        if (!recipe) return null;
+        return {
+            recipeID: recipe.RecipeID,
+            productID: recipe.ProductID,
+            description: recipe.Description,
+            // C# GetByIdAsync does not Include the navigation collection.
+            recipeIngredients: []
+        };
+    }
+
     // The read endpoint uses RecipeResponseDto; create currently uses the richer helper below.
     static async getDetailsById(id: string): Promise<any | null> {
         const recipe = await queryOne('SELECT RecipeID, Description FROM Recipes WHERE RecipeID = @id', { id });
