@@ -348,6 +348,26 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/ingredient/{id}': {
+            put: {
+                summary: 'Update ingredient name and unit',
+                description: 'Public endpoint matching the C# IngredientDto. Other fields are ignored.',
+                tags: ['Ingredients'],
+                security: [],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: {
+                    type: 'object', required: ['ingredientName', 'unit'], properties: {
+                        ingredientName: { type: 'string' }, unit: { type: 'string' }
+                    }
+                } } } },
+                responses: {
+                    200: { description: 'Ingredient updated successfully' },
+                    400: { description: 'Invalid ingredient data' },
+                    404: { description: 'Ingredient not found or invalid GUID route' },
+                    500: { description: 'An internal error occurred.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',
