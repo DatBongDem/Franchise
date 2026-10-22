@@ -6,9 +6,14 @@ export class StoreController {
     static async getAll(req: Request, res: Response): Promise<void> {
         try {
             const stores = await StoreService.getAll();
-            res.json(stores);
-        } catch (error) {
-            res.status(500).json({ message: 'An internal error occurred.' });
+            res.json(stores.map(store => ({
+                storeId: store.StoreId,
+                storeName: store.StoreName,
+                address: store.Address,
+                status: store.Status
+            })));
+        } catch (error: any) {
+            res.status(400).json(error.message);
         }
     }
 
