@@ -15,6 +15,7 @@ const router = Router();
 
 router.use('/users', usersRoutes);
 router.use('/store', storeRoutes);
+router.use('/stores', storeRoutes);
 router.use('/category', categoryRoutes);
 router.use('/product', productRoutes);
 router.use('/order', orderRoutes);
