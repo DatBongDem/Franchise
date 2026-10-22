@@ -275,6 +275,21 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/delivery/{orderId}/arrive-at-store': {
+            put: {
+                summary: 'Mark an order as arrived at the store',
+                description: 'Changes TakenFrom to Arrived and records ArrivedTime in Vietnam time. Public endpoint, matching FranchiseStore.',
+                tags: ['Delivery'],
+                security: [],
+                parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: {
+                    200: { description: 'Order has arrived at the store successfully.' },
+                    400: { description: 'Invalid order ID or order is not TakenFrom' },
+                    404: { description: 'Order not found' },
+                    500: { description: 'An error occurred while marking the order as arrived.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',
