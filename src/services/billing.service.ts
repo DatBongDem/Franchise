@@ -2,6 +2,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { getPool, query, queryOne, execute, sql } from '../config/db';
 import { StatusEnum } from '../constants/status.enum';
 
+export class RevenueAccessError extends Error {}
+export class RevenueUserNotFoundError extends Error {}
+export class RevenueInputError extends Error {}
+
 export interface CreateBillItemRequest {
     ProductId: string;
     Quantity: number;
@@ -217,37 +221,55 @@ export class BillingService {
         return { listBills: bills, totalRecords: total?.count || 0 };
     }
 
-    static async getStoreRevenue(storeId: string, dateStr: string, endDateStr?: string): Promise<any> {
-        const fromDate = new Date(dateStr);
-        const toDate = endDateStr ? new Date(endDateStr) : new Date(dateStr);
-        toDate.setDate(toDate.getDate() + 1); // Inclusive
+    static async getStoreRevenue(userId: string, storeId: string, date?: Date, endDate?: Date): Promise<any> {
+        const user = await queryOne('SELECT Id, Role, IdStore FROM Users WHERE Id = @userId', { userId });
+        if (!user) throw new RevenueUserNotFoundError('User not found');
+        if (user.Role !== 'MANAGER' || user.IdStore?.toLowerCase() !== storeId.toLowerCase()) {
+            throw new RevenueAccessError('User does not have permission');
+        }
+        if (!date) throw new RevenueInputError('Date is required');
+        if (endDate && endDate < date) throw new RevenueInputError('EndDate must be greater than or equal to Date');
 
-        const summary = await queryOne(
-            `SELECT COUNT(*) AS TotalBills, ISNULL(SUM(TotalAmount), 0) AS TotalRevenue
-             FROM Bills
-             WHERE StoreId = @storeId AND CreatedTime >= @fromDate AND CreatedTime < @toDate`,
-            { storeId, fromDate, toDate }
-        );
-
+        const fromDate = new Date(date);
+        fromDate.setUTCHours(0, 0, 0, 0);
+        const toDate = new Date(endDate ?? date);
+        toDate.setUTCHours(0, 0, 0, 0);
+        toDate.setUTCDate(toDate.getUTCDate() + 1);
+        // Keep money arithmetic in SQL decimal, including the sums of grouped values.
         const productSales = await query(
-            `SELECT p.ProductId, p.ProductName, SUM(bd.Quantity) AS TotalQuantitySold, SUM(bd.TotalPrice) AS TotalRevenue
-             FROM BillDetails bd
-             JOIN Bills b ON bd.BillId = b.BillId
-             JOIN Products p ON bd.ProductId = p.ProductId
-             WHERE b.StoreId = @storeId AND b.CreatedTime >= @fromDate AND b.CreatedTime < @toDate
-             GROUP BY p.ProductId, p.ProductName
-             ORDER BY TotalRevenue DESC`,
+            `WITH ProductRevenue AS (
+                SELECT b.StoreId, pb.ProductId, p.ProductName, MIN(b.CreatedTime) AS SaleDate,
+                       SUM(bd.Quantity) AS TotalQuantitySold,
+                       CAST(SUM(bd.Quantity * bd.UnitPrice) AS decimal(28,2)) AS TotalRevenue,
+                       CAST(SUM(bd.Quantity * p.Price) AS decimal(28,2)) AS TotalCost,
+                       CAST(SUM(bd.Quantity * bd.UnitPrice) AS decimal(28,2))
+                         - CAST(SUM(bd.Quantity * p.Price) AS decimal(28,2)) AS Profit
+                FROM Bills b
+                JOIN BillDetails bd ON b.BillId = bd.BillId
+                JOIN ProductBatches pb ON bd.BatchId = pb.BatchId
+                JOIN Products p ON pb.ProductId = p.ProductId
+                WHERE b.StoreId = @storeId AND b.CreatedTime >= @fromDate AND b.CreatedTime < @toDate
+                GROUP BY b.StoreId, pb.ProductId, p.ProductName
+             )
+             SELECT *, SUM(TotalRevenue) OVER () AS SummaryTotalRevenue,
+                       SUM(TotalCost) OVER () AS SummaryTotalCost,
+                       SUM(Profit) OVER () AS SummaryTotalProfit
+             FROM ProductRevenue`,
             { storeId, fromDate, toDate }
         );
 
         return {
-            storeId,
-            fromDate,
-            toDate,
-            totalBills: summary?.TotalBills || 0,
-            totalRevenue: summary?.TotalRevenue || 0,
-            averageBillValue: summary?.TotalBills ? summary.TotalRevenue / summary.TotalBills : 0,
-            products: productSales
+            summary: {
+                saleDate: fromDate,
+                totalRevenue: productSales[0]?.SummaryTotalRevenue ?? 0,
+                totalCost: productSales[0]?.SummaryTotalCost ?? 0,
+                totalProfit: productSales[0]?.SummaryTotalProfit ?? 0
+            },
+            items: productSales.map(item => ({
+                storeId: item.StoreId, saleDate: item.SaleDate, productId: item.ProductId,
+                productName: item.ProductName, totalQuantitySold: item.TotalQuantitySold,
+                totalRevenue: item.TotalRevenue, totalCost: item.TotalCost, profit: item.Profit
+            }))
         };
     }
 }
