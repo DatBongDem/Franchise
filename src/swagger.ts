@@ -403,6 +403,22 @@ const swaggerDocument = {
             }
         },
         '/api/stores/{id}': {
+            put: {
+                summary: 'Update store name and address',
+                description: 'Matches C# UpdateStoreDto. A null or omitted address clears the address. Also available at /api/store/{id}.',
+                tags: ['Stores'],
+                security: [],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: {
+                    type: 'object', required: ['storeName'], properties: {
+                        storeName: { type: 'string' }, address: { type: 'string', nullable: true }
+                    }
+                } } } },
+                responses: {
+                    200: { description: 'Update store successfully' },
+                    400: { description: 'Invalid input, store not found, or update failed' }
+                }
+            },
             get: {
                 summary: 'Get store by ID',
                 description: 'Returns the C# StoreDto shape. Also available at /api/store/{id}.',
