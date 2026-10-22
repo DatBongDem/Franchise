@@ -136,14 +136,15 @@ export class OrderService {
 
     static async sendToKitchen(orderId: string): Promise<void> {
         const order = await this.getOrderById(orderId);
-        if (!order) throw new Error(`Order with ID ${orderId} not found.`);
+        if (!order) throw new OrderNotFoundError(`Order with ID ${orderId} not found.`);
         if (order.Status !== StatusEnum.PickedUp) {
-            throw new Error("Order status must be 'PickedUp' to be sent to the kitchen.");
+            throw new OrderInvalidStateError("Order status must be 'PickedUp' to be sent to the kitchen.");
         }
 
         await execute(
             `UPDATE Orders SET Status = @status, KitchenReceivedTime = @now WHERE OrderId = @orderId`,
-            { orderId, status: StatusEnum.WaitingForCooking, now: new Date() }
+            // Match the Vietnam wall-clock time C# stores in SQL DATETIME2.
+            { orderId, status: StatusEnum.WaitingForCooking, now: new Date(Date.now() + 7 * 60 * 60 * 1000) }
         );
     }
 
