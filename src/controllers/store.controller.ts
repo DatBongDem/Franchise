@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { StoreService } from '../services/store.service';
+import { OrderService } from '../services/order.service';
 
 export class StoreController {
     static async getAll(req: Request, res: Response): Promise<void> {
@@ -37,9 +38,10 @@ export class StoreController {
                 StoreName: name,
                 Address: address || Address
             });
-            res.status(201).json(store);
+            await OrderService.createOrder({ Type: 'Normal', Note: '' }, store.StoreId);
+            res.status(200).json('Create store and initial order successfully');
         } catch (error: any) {
-            res.status(500).json({ message: 'An internal error occurred.', error: error.message });
+            res.status(400).json(error.message);
         }
     }
 

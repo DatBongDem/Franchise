@@ -94,14 +94,14 @@ const swaggerDocument = {
                 responses: { 201: { description: 'Created user' } }
             }
         },
-        '/api/store': {
+        '/api/stores': {
             get: {
                 summary: 'Get All Stores',
                 tags: ['Stores'],
                 responses: { 200: { description: 'List of stores' } }
             },
             post: {
-                summary: 'Create Store',
+                summary: 'Create store and initial Creating order',
                 tags: ['Stores'],
                 requestBody: {
                     required: true,
@@ -117,7 +117,10 @@ const swaggerDocument = {
                         }
                     }
                 },
-                responses: { 201: { description: 'Created store' } }
+                responses: {
+                    200: { description: 'Create store and initial order successfully' },
+                    400: { description: 'Invalid input or store/order creation failed' }
+                }
             }
         },
         '/api/category': {
