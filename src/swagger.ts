@@ -57,8 +57,14 @@ const swaggerDocument = {
         '/api/users': {
             get: {
                 summary: 'Get All Users (ADMIN, MANAGER)',
+                description: 'Returns the C# UserDto list, including blocked accounts and excluding password data.',
                 tags: ['Users'],
-                responses: { 200: { description: 'List of users' } }
+                responses: {
+                    200: { description: 'List of user profiles; empty array when none exist' },
+                    401: { description: 'Authentication required' },
+                    403: { description: 'ADMIN or MANAGER role required' },
+                    500: { description: 'An internal error occurred.' }
+                }
             },
             post: {
                 summary: 'Create User (ADMIN)',
