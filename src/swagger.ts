@@ -215,6 +215,22 @@ const swaggerDocument = {
                 responses: { 200: { description: 'Order ID or false' } }
             }
         },
+        '/api/order/{orderId}/start-cooking': {
+            put: {
+                summary: 'Start cooking and record ingredient usage (KITCHENSTAFF)',
+                description: 'Matches C#: WaitingForCooking becomes Cooking with Vietnam time; existing CookingTime is preserved for Cooking orders. Cooked batches keep their status. Ingredient histories use UTC and quantity per recipe multiplied by batch quantity.',
+                tags: ['Orders'],
+                parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: {
+                    200: { description: 'Order has started cooking and ingredient history has been recorded.' },
+                    400: { description: 'Invalid order ID/status, no batches, or recipe references a missing ingredient' },
+                    401: { description: 'Authentication or user ID required' },
+                    403: { description: 'KITCHENSTAFF role required' },
+                    404: { description: 'Order not found.' },
+                    500: { description: 'An error occurred while starting to cook the order.' }
+                }
+            }
+        },
         '/api/order/{orderId}/finish-cooking': {
             put: {
                 summary: 'Finish cooking an order (KITCHENSTAFF)',
