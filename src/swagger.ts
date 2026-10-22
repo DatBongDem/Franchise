@@ -509,6 +509,40 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/ingredient/ingredient-history': {
+            get: {
+                summary: 'Get paginated cooking ingredient history (KITCHENSTAFF)',
+                description: 'Matches C#: data contains items, totalRecords, pageNumber, pageSize and totalPages. Each item contains ingredientId, ingredientName, quantityUsed and unit. Missing ingredient names use N/A. Newest histories first.',
+                tags: ['Ingredients'],
+                parameters: [
+                    { name: 'pageNumber', in: 'query', schema: { type: 'integer', default: 1 } },
+                    { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 10 } }
+                ],
+                responses: {
+                    200: { description: 'Paginated ingredient histories' },
+                    400: { description: 'Invalid integer query parameter' },
+                    401: { description: 'Authentication required' },
+                    403: { description: 'KITCHENSTAFF role required' },
+                    500: { description: 'An internal error occurred.' }
+                }
+            }
+        },
+        '/api/ingredient/{orderId}/ingredients': {
+            get: {
+                summary: 'Get cooking ingredient history for an order (KITCHENSTAFF)',
+                description: 'Matches C#: returns ingredientId, ingredientName, quantityUsed and unit for histories linked by BatchId. Empty array for an existing order with no batches or histories. Missing ingredient names use N/A.',
+                tags: ['Ingredients'],
+                parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: {
+                    200: { description: 'Ingredient histories for the order' },
+                    400: { description: 'Invalid order ID' },
+                    401: { description: 'Authentication required' },
+                    403: { description: 'KITCHENSTAFF role required' },
+                    404: { description: 'Order not found.' },
+                    500: { description: 'An error occurred while retrieving cooking ingredient history.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',

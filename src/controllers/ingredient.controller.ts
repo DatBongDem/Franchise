@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { IngredientService } from '../services/ingredient.service';
+import { IngredientHistoryOrderNotFoundError, IngredientService } from '../services/ingredient.service';
 
 export class IngredientController {
     static async getAll(req: Request, res: Response): Promise<void> {
@@ -88,9 +88,21 @@ export class IngredientController {
     }
 
     static async getIngredientHistory(req: Request, res: Response): Promise<void> {
+        const integerQuery = (name: string, fallback: number): number => {
+            const key = Object.keys(req.query).find(key => key.toLowerCase() === name.toLowerCase());
+            if (key === undefined) return fallback;
+            const raw = req.query[key];
+            if (typeof raw !== 'string' || !/^[+-]?\d+$/.test(raw)) return NaN;
+            const value = Number(raw);
+            return Number.isInteger(value) && value >= -2147483648 && value <= 2147483647 ? value : NaN;
+        };
+        const pageNumber = integerQuery('pageNumber', 1);
+        const pageSize = integerQuery('pageSize', 10);
+        if (!Number.isFinite(pageNumber) || !Number.isFinite(pageSize)) {
+            res.status(400).json({ message: 'pageNumber and pageSize must be valid integers.' });
+            return;
+        }
         try {
-            const pageNumber = parseInt(req.query.pageNumber as string || '1', 10);
-            const pageSize = parseInt(req.query.pageSize as string || '10', 10);
             const result = await IngredientService.getAllCookingIngredientHistories(pageNumber, pageSize);
 
             res.json({
@@ -106,10 +118,18 @@ export class IngredientController {
     }
 
     static async getCookingIngredients(req: Request, res: Response): Promise<void> {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.orderId)) {
+            res.status(400).json({ message: 'Invalid order ID.' });
+            return;
+        }
         try {
             const result = await IngredientService.getCookingIngredientsByOrder(req.params.orderId);
             res.json(result);
         } catch (error: any) {
+            if (error instanceof IngredientHistoryOrderNotFoundError) {
+                res.status(404).json({ message: error.message });
+                return;
+            }
             res.status(500).json({
                 message: 'An error occurred while retrieving cooking ingredient history.',
                 error: error.message
