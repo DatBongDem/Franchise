@@ -2,6 +2,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { query, queryOne, execute } from '../config/db';
 import { StatusEnum } from '../constants/status.enum';
 
+export class OrderNotFoundError extends Error {}
+
 export class OrderService {
     static async getCreatingOrderIdForStore(storeId: string): Promise<string | null> {
         const order = await queryOne(
@@ -196,9 +198,10 @@ export class OrderService {
 
     static async finishCooking(orderId: string): Promise<void> {
         const order = await this.getOrderById(orderId);
-        if (!order) throw new Error(`Order with ID ${orderId} not found.`);
+        if (!order) throw new OrderNotFoundError(`Order with ID ${orderId} not found.`);
 
-        const now = new Date();
+        // C# persists Vietnam wall-clock time in timezone-free SQL DATETIME2 fields.
+        const now = new Date(Date.now() + 7 * 60 * 60 * 1000);
         await execute(
             `UPDATE Orders SET Status = @status, CookedTime = @now WHERE OrderId = @orderId`,
             { orderId, status: StatusEnum.Cooked, now }
@@ -208,7 +211,7 @@ export class OrderService {
         const batches = await query('SELECT pb.*, p.NumberOfDaysToExpire FROM ProductBatches pb JOIN Products p ON pb.ProductId = p.ProductId WHERE pb.OrderId = @orderId', { orderId });
         for (const b of batches) {
             const expiry = new Date(now);
-            expiry.setDate(expiry.getDate() + (b.NumberOfDaysToExpire || 0));
+            expiry.setUTCDate(expiry.getUTCDate() + b.NumberOfDaysToExpire);
 
             await execute(
                 `UPDATE ProductBatches
