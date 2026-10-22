@@ -1,6 +1,24 @@
 import { v4 as uuidv4 } from 'uuid';
 import { query, queryOne, execute } from '../config/db';
 
+export class IngredientHistoryOrderNotFoundError extends Error {}
+
+export interface CookingIngredientHistoryDto {
+    ingredientId: string;
+    ingredientName: string;
+    quantityUsed: number;
+    unit: string;
+}
+
+function toHistoryDto(row: any): CookingIngredientHistoryDto {
+    return {
+        ingredientId: row.IngredientId,
+        ingredientName: row.IngredientName ?? 'N/A',
+        quantityUsed: row.QuantityUsed,
+        unit: row.Unit
+    };
+}
+
 export interface IngredientDto {
     IngredientId: string;
     IngredientName: string;
@@ -54,28 +72,45 @@ export class IngredientService {
         return (result.rowsAffected[0] || 0) > 0;
     }
 
-    static async getCookingIngredientsByOrder(orderId: string): Promise<any[]> {
-        return await query(
-            `SELECT cih.*, i.IngredientName
-             FROM CookingIngredientHistories cih
-             JOIN Ingredients i ON cih.IngredientId = i.IngredientId
-             JOIN ProductBatches pb ON (cih.BatchId = pb.BatchId OR cih.ProductBatchBatchId = pb.BatchId)
-             WHERE pb.OrderId = @orderId`,
-            { orderId }
-        );
+    static async getCookingIngredientsByOrder(orderId: string): Promise<CookingIngredientHistoryDto[]> {
+        const order = await queryOne('SELECT OrderId FROM Orders WHERE OrderId = @orderId', { orderId });
+        if (!order) throw new IngredientHistoryOrderNotFoundError('Order not found.');
+        const batches = await query('SELECT BatchId FROM ProductBatches WHERE OrderId = @orderId', { orderId });
+        if (batches.length === 0) return [];
+
+        let histories;
+        try {
+            histories = await query(
+                `SELECT cih.IngredientId, i.IngredientName, cih.QuantityUsed, cih.Unit
+                 FROM CookingIngredientHistories cih
+                 LEFT JOIN Ingredients i ON cih.IngredientId = i.IngredientId
+                 WHERE cih.BatchId IN (SELECT BatchId FROM OPENJSON(@batchIds) WITH (BatchId uniqueidentifier '$'))`,
+                { batchIds: JSON.stringify(batches.map(batch => batch.BatchId)) }
+            );
+        } catch {
+            throw new Error('An error occurred while fetching data from the database.');
+        }
+        try {
+            return histories.map(toHistoryDto);
+        } catch {
+            throw new Error('An error occurred while mapping data to DTO.');
+        }
     }
 
-    static async getAllCookingIngredientHistories(pageNumber: number = 1, pageSize: number = 10): Promise<{ items: any[]; totalCount: number }> {
+    static async getAllCookingIngredientHistories(pageNumber: number = 1, pageSize: number = 10): Promise<{
+        items: CookingIngredientHistoryDto[]; totalRecords: number; pageNumber: number; pageSize: number; totalPages: number;
+    }> {
         const offset = (pageNumber - 1) * pageSize;
         const total = await queryOne('SELECT COUNT(*) AS count FROM CookingIngredientHistories');
         const items = await query(
-            `SELECT cih.*, i.IngredientName
+            `SELECT cih.IngredientId, i.IngredientName, cih.QuantityUsed, cih.Unit
              FROM CookingIngredientHistories cih
-             JOIN Ingredients i ON cih.IngredientId = i.IngredientId
+             LEFT JOIN Ingredients i ON cih.IngredientId = i.IngredientId
              ORDER BY cih.CreatedTime DESC
              OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY`,
             { offset, pageSize }
         );
-        return { items, totalCount: total?.count || 0 };
+        const totalRecords = total?.count ?? 0;
+        return { items: items.map(toHistoryDto), totalRecords, pageNumber, pageSize, totalPages: Math.ceil(totalRecords / pageSize) };
     }
 }
