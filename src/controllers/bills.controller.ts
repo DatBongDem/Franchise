@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { BillingService } from '../services/billing.service';
+import { BillingService, RevenueAccessError, RevenueInputError, RevenueUserNotFoundError } from '../services/billing.service';
 
 export class BillsController {
     static async createBill(req: Request, res: Response): Promise<void> {
@@ -88,24 +88,47 @@ export class BillsController {
     }
 
     static async getStoreRevenue(req: Request, res: Response): Promise<void> {
+        const isGuid = (value: unknown): value is string => typeof value === 'string'
+            && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+        const queryField = (name: string) => {
+            const key = Object.keys(req.query).find(key => key.toLowerCase() === name.toLowerCase());
+            return key === undefined ? undefined : req.query[key];
+        };
+        const parseDate = (value: unknown): Date | undefined => {
+            if (value === undefined || value === '') return undefined;
+            if (typeof value !== 'string') throw new RevenueInputError('Invalid date filter.');
+            const parsed = new Date(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(value) ? `${value}Z` : value);
+            if (!Number.isFinite(parsed.getTime())) throw new RevenueInputError('Invalid date filter.');
+            const calendar = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+            if (calendar) {
+                const check = new Date(`${calendar[0]}T00:00:00Z`);
+                if (check.getUTCFullYear() !== Number(calendar[1]) || check.getUTCMonth() + 1 !== Number(calendar[2])
+                    || check.getUTCDate() !== Number(calendar[3])) throw new RevenueInputError('Invalid date filter.');
+            }
+            return parsed;
+        };
         try {
             const storeId = req.params.storeId;
-            const date = req.query.Date as string || req.query.date as string;
-            const endDate = req.query.EndDate as string || req.query.endDate as string;
-
-            if (!date) {
-                res.status(400).json({ message: 'Date is required' });
+            if (!isGuid(storeId)) throw new RevenueInputError('Invalid store ID.');
+            const date = parseDate(queryField('date'));
+            const endDate = parseDate(queryField('endDate'));
+            const userId = req.user?.id;
+            if (!isGuid(userId)) {
+                res.status(403).json({ message: 'User ID not found in token.' });
                 return;
             }
 
-            const result = await BillingService.getStoreRevenue(storeId, date, endDate);
+            const result = await BillingService.getStoreRevenue(userId, storeId, date, endDate);
             res.json({
                 status: 0,
                 data: result,
                 message: 'Get store revenue successfully'
             });
         } catch (error: any) {
-            res.status(400).json({ message: error.message });
+            if (error instanceof RevenueInputError) { res.status(400).json({ message: error.message }); return; }
+            if (error instanceof RevenueAccessError) { res.status(403).json({ message: error.message }); return; }
+            if (error instanceof RevenueUserNotFoundError) { res.status(404).json({ message: error.message }); return; }
+            res.status(500).json({ message: 'An internal error occurred.' });
         }
     }
 

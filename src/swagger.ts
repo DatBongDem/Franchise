@@ -565,6 +565,26 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/bills/stores/{storeId}/revenue': {
+            get: {
+                summary: 'Get store revenue, cost and profit',
+                description: 'Matches C#: route accepts STORESTAFF/MANAGER/ADMIN, but the database user must be MANAGER of this store. Date is required; EndDate must not precede Date. Includes the full end day. Returns summary and items grouped by product, using batch product Price for cost and bill-detail UnitPrice for revenue.',
+                tags: ['Bills'],
+                parameters: [
+                    { name: 'storeId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'Date', in: 'query', required: true, schema: { type: 'string', format: 'date-time' } },
+                    { name: 'EndDate', in: 'query', schema: { type: 'string', format: 'date-time' } }
+                ],
+                responses: {
+                    200: { description: 'summary: saleDate, totalRevenue, totalCost, totalProfit; items: storeId, saleDate, productId, productName, totalQuantitySold, totalRevenue, totalCost, profit' },
+                    400: { description: 'Invalid input or date interval' },
+                    401: { description: 'Authentication required' },
+                    403: { description: 'User has no permission or token user ID is invalid' },
+                    404: { description: 'User not found' },
+                    500: { description: 'An internal error occurred.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',
