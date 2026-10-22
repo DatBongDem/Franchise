@@ -4,8 +4,8 @@ import { QuantitativeService } from '../services/quantitative.service';
 export class QuantitativeController {
     static async getQuantitativesForStore(req: Request, res: Response): Promise<void> {
         try {
-            const storeId = req.query.storeId as string || req.user?.idStore;
-            if (!storeId) {
+            const storeId = req.user?.idStore;
+            if (!storeId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(storeId)) {
                 res.status(401).json({ message: 'Store ID not found or invalid in token.' });
                 return;
             }
