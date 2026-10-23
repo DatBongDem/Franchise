@@ -5,6 +5,8 @@ import { StatusEnum } from '../constants/status.enum';
 export class RevenueAccessError extends Error {}
 export class RevenueUserNotFoundError extends Error {}
 export class RevenueInputError extends Error {}
+export class BillingHistoryAccessError extends Error {}
+export class BillingHistoryUserNotFoundError extends Error {}
 
 export interface CreateBillItemRequest {
     ProductId: string;
@@ -151,40 +153,56 @@ export class BillingService {
     }
 
     static async getBillingHistoryAtStore(
+        userId: string,
         storeId: string,
         pageNumber: number = 1,
         pageSize: number = 10,
-        fromDate?: string,
-        toDate?: string
+        fromDate?: Date,
+        toDate?: Date
     ): Promise<{ listBills: any[]; totalRecords: number }> {
-        const offset = (pageNumber - 1) * pageSize;
-        const total = await queryOne(
-            `SELECT COUNT(*) AS count FROM Bills WHERE StoreId = @storeId`,
-            { storeId }
-        );
-
-        const bills = await query(
-            `SELECT b.*, u.Name AS StaffName
-             FROM Bills b
-             JOIN Users u ON b.UserId = u.Id
-             WHERE b.StoreId = @storeId
-             ORDER BY b.CreatedTime DESC
-             OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY`,
-            { storeId, offset, pageSize }
-        );
-
-        // Fetch details for bills
-        for (const b of bills) {
-            b.Details = await query(
-                `SELECT bd.*, p.ProductName
-                 FROM BillDetails bd
-                 JOIN Products p ON bd.ProductId = p.ProductId
-                 WHERE bd.BillId = @billId`,
-                { billId: b.BillId }
-            );
+        const user = await queryOne('SELECT Id, Role, IdStore FROM Users WHERE Id = @userId', { userId });
+        if (!user) throw new BillingHistoryUserNotFoundError('User not found');
+        if (user.Role !== 'MANAGER' || user.IdStore?.toLowerCase() !== storeId.toLowerCase()) {
+            throw new BillingHistoryAccessError('User does not have permission!!!');
         }
-
-        return { listBills: bills, totalRecords: total?.count || 0 };
+        let predicate = 'StoreId = @storeId';
+        const filters: Record<string, any> = { storeId };
+        if (fromDate) { predicate += ' AND CreatedTime >= @fromDate'; filters.fromDate = fromDate; }
+        if (toDate) { predicate += ' AND CreatedTime <= @toDate'; filters.toDate = toDate; }
+        const total = await queryOne(`SELECT COUNT(*) AS count FROM Bills WHERE ${predicate}`, filters);
+        const offset = (pageNumber - 1) * pageSize;
+        const bills = pageSize === 0 ? [] : await query(
+            `SELECT BillId, CreatedTime, TotalAmount FROM Bills WHERE ${predicate}
+             ORDER BY CreatedTime DESC
+             OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY`,
+            { ...filters, offset, pageSize }
+        );
+        if (bills.length === 0) return { listBills: [], totalRecords: total?.count ?? 0 };
+        const details = await query(
+            `SELECT bd.BillId, bd.BillDetailId, pb.ProductId, p.ProductName, bd.Quantity, bd.UnitPrice, bd.TotalPrice
+             FROM BillDetails bd
+             JOIN ProductBatches pb ON bd.BatchId = pb.BatchId
+             JOIN Products p ON pb.ProductId = p.ProductId
+             WHERE bd.BillId IN (SELECT BillId FROM OPENJSON(@billIds) WITH (BillId uniqueidentifier '$'))`,
+            { billIds: JSON.stringify(bills.map(bill => bill.BillId)) }
+        );
+        const detailsByBill = new Map<string, any[]>();
+        for (const detail of details) {
+            const key = detail.BillId.toLowerCase();
+            const items = detailsByBill.get(key) ?? [];
+            items.push({
+                billDetailId: detail.BillDetailId, productId: detail.ProductId, productName: detail.ProductName,
+                quantity: detail.Quantity, unitPrice: detail.UnitPrice, totalPrice: detail.TotalPrice
+            });
+            detailsByBill.set(key, items);
+        }
+        return {
+            listBills: bills.map(bill => ({
+                billId: bill.BillId, createdTime: bill.CreatedTime, totalAmount: bill.TotalAmount,
+                details: detailsByBill.get(bill.BillId.toLowerCase()) ?? []
+            })),
+            totalRecords: total?.count ?? 0
+        };
     }
 
     static async getBillingHistoryByStaff(
