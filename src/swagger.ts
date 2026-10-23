@@ -376,6 +376,12 @@ const swaggerDocument = {
             }
         },
         '/api/ingredient/{id}': {
+            get: {
+                summary: 'Get ingredient by ID', tags: ['Ingredients'], security: [],
+                description: 'Returns the C# Ingredient shape without Status, with unloaded navigation collections as empty arrays.',
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Ingredient' }, 404: { description: 'Ingredient not found or invalid GUID route' }, 500: { description: 'Lookup failed' } }
+            },
             put: {
                 summary: 'Update ingredient name and unit',
                 description: 'Public endpoint matching the C# IngredientDto. Other fields are ignored.',
@@ -396,6 +402,12 @@ const swaggerDocument = {
             }
         },
         '/api/recipe/{id}': {
+            delete: {
+                summary: 'Delete a recipe', tags: ['Recipes'], security: [],
+                description: 'Matches C#: an absent recipe throws from the repository and returns 500.',
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: { 200: { description: 'Recipe deleted successfully' }, 400: { description: 'Invalid recipe ID' }, 500: { description: 'Recipe not found or deletion failed' } }
+            },
             put: {
                 summary: 'Update recipe description and replace ingredients',
                 description: 'Matches C#: ProductId is bound but not changed. Empty/omitted ingredients clear the recipe. Description and removal of old ingredients are saved first; the replacement collection is saved next. If replacement insertion fails, the first save remains committed.',
@@ -661,6 +673,17 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/order/by-store': {
+            get: {
+                summary: 'Get order IDs for the token store (STORESTAFF)', tags: ['Orders'],
+                description: 'Returns only an array of order IDs, including all statuses, for the store in the token.',
+                responses: {
+                    200: { description: 'Order IDs; empty array when none exist', content: { 'application/json': { schema: { type: 'array', items: { type: 'string', format: 'uuid' } } } } },
+                    401: { description: 'Authentication or valid token store required' }, 403: { description: 'STORESTAFF role required' },
+                    500: { description: 'An error occurred while retrieving order IDs by store.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',
@@ -706,9 +729,22 @@ const swaggerDocument = {
             }
         },
         '/api/ingredient': {
+            post: {
+                summary: 'Create an ingredient', tags: ['Ingredients'], security: [],
+                description: 'Matches C# IngredientDto: ingredientName and unit only. Other fields such as Status are ignored.',
+                requestBody: { required: true, content: { 'application/json': { schema: {
+                    type: 'object', required: ['ingredientName', 'unit'], properties: { ingredientName: { type: 'string' }, unit: { type: 'string' } }
+                } } } },
+                responses: {
+                    201: { description: 'Created Ingredient', headers: { Location: { schema: { type: 'string' }, description: 'URL of created ingredient' } } },
+                    400: { description: 'Invalid IngredientDto' }, 500: { description: 'Creation failed' }
+                }
+            },
             get: {
                 summary: 'Get All Ingredients',
+                description: 'Returns C# Ingredient entities with ingredientId, ingredientName, unit and two empty navigation collections. Status is excluded.',
                 tags: ['Ingredients'],
+                security: [],
                 responses: { 200: { description: 'List of ingredients' } }
             }
         },

@@ -176,6 +176,7 @@ export class RecipeService {
 
     static async delete(id: string): Promise<boolean> {
         const result = await execute('DELETE FROM Recipes WHERE RecipeID = @id', { id });
-        return (result.rowsAffected[0] || 0) > 0;
+        if (!(result.rowsAffected[0] > 0)) throw new Error(`Not found Recipe with Id: ${id}`);
+        return true;
     }
 }

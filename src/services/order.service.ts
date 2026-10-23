@@ -44,8 +44,9 @@ export class OrderService {
         return await query('SELECT * FROM Orders ORDER BY SentTime DESC');
     }
 
-    static async getOrdersByStore(storeId: string): Promise<any[]> {
-        return await query('SELECT * FROM Orders WHERE StoreId = @storeId ORDER BY SentTime DESC', { storeId });
+    static async getOrdersByStore(storeId: string): Promise<string[]> {
+        const orders = await query('SELECT OrderId FROM Orders WHERE StoreId = @storeId', { storeId });
+        return orders.map(order => order.OrderId);
     }
 
     static async getOrderWithDetails(orderId: string): Promise<any | null> {

@@ -112,15 +112,15 @@ export class RecipeController {
     }
 
     static async delete(req: Request, res: Response): Promise<void> {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+            res.status(400).json({ message: 'Invalid recipe ID.' });
+            return;
+        }
         try {
-            const success = await RecipeService.delete(req.params.id);
-            if (!success) {
-                res.status(404).json({ message: 'Recipe not found' });
-                return;
-            }
+            await RecipeService.delete(req.params.id);
             res.json('Recipe deleted successfully');
-        } catch (error) {
-            res.status(500).json({ message: 'An internal error occurred.' });
+        } catch (error: any) {
+            res.status(500).json({ message: error.message });
         }
     }
 }
