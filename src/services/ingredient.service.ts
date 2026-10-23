@@ -23,31 +23,29 @@ export interface IngredientDto {
     IngredientId: string;
     IngredientName: string;
     Unit: string;
-    Status: string;
 }
 
 export class IngredientService {
     static async getAll(): Promise<IngredientDto[]> {
-        return await query('SELECT IngredientId, IngredientName, Unit, Status FROM Ingredients');
+        return await query('SELECT IngredientId, IngredientName, Unit FROM Ingredients');
     }
 
     static async getById(id: string): Promise<IngredientDto | null> {
-        return await queryOne('SELECT IngredientId, IngredientName, Unit, Status FROM Ingredients WHERE IngredientId = @id', { id });
+        return await queryOne('SELECT IngredientId, IngredientName, Unit FROM Ingredients WHERE IngredientId = @id', { id });
     }
 
-    static async create(dto: { IngredientName: string; Unit: string; Status?: string }): Promise<IngredientDto> {
+    static async create(dto: { IngredientName: string; Unit: string }): Promise<IngredientDto> {
         const id = uuidv4();
         await execute(
-            `INSERT INTO Ingredients (IngredientId, IngredientName, Unit, Status)
-             VALUES (@id, @name, @unit, @status)`,
+            `INSERT INTO Ingredients (IngredientId, IngredientName, Unit)
+             VALUES (@id, @name, @unit)`,
             {
                 id,
                 name: dto.IngredientName,
-                unit: dto.Unit,
-                status: dto.Status || 'Active'
+                unit: dto.Unit
             }
         );
-        return (await this.getById(id))!;
+        return { IngredientId: id, IngredientName: dto.IngredientName, Unit: dto.Unit };
     }
 
     static async update(id: string, dto: { IngredientName: string; Unit: string }): Promise<boolean> {

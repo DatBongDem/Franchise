@@ -1,46 +1,57 @@
 import { Request, Response } from 'express';
-import { IngredientHistoryOrderNotFoundError, IngredientService } from '../services/ingredient.service';
+import { IngredientDto, IngredientHistoryOrderNotFoundError, IngredientService } from '../services/ingredient.service';
+
+function ingredientResponse(item: IngredientDto) {
+    // These navigation collections are initialized but not loaded by the C# read/create methods.
+    return {
+        ingredientId: item.IngredientId, ingredientName: item.IngredientName, unit: item.Unit,
+        recipeIngredients: [], cookingIngredientHistories: []
+    };
+}
 
 export class IngredientController {
     static async getAll(req: Request, res: Response): Promise<void> {
         try {
             const list = await IngredientService.getAll();
-            res.json(list);
+            res.json(list.map(ingredientResponse));
         } catch (error) {
             res.status(500).json({ message: 'An internal error occurred.' });
         }
     }
 
     static async getById(req: Request, res: Response): Promise<void> {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+            res.status(404).send();
+            return;
+        }
         try {
             const item = await IngredientService.getById(req.params.id);
             if (!item) {
-                res.status(404).json({ message: 'Ingredient not found' });
+                res.status(404).send();
                 return;
             }
-            res.json(item);
+            res.json(ingredientResponse(item));
         } catch (error) {
             res.status(500).json({ message: 'An internal error occurred.' });
         }
     }
 
     static async create(req: Request, res: Response): Promise<void> {
+        const body = req.body;
+        const field = (name: string) => body && typeof body === 'object'
+            ? body[Object.keys(body).find(key => key.toLowerCase() === name.toLowerCase()) ?? name] : undefined;
+        const name = field('ingredientName');
+        const unit = field('unit');
+        if (!body || Array.isArray(body) || typeof name !== 'string' || typeof unit !== 'string') {
+            res.status(400).json({ message: 'IngredientName and Unit must be provided as strings.' });
+            return;
+        }
         try {
-            const { ingredientName, IngredientName, unit, Unit, status, Status } = req.body;
-            const name = ingredientName || IngredientName;
-            const u = unit || Unit;
-
-            if (!name || !u) {
-                res.status(400).json({ message: 'IngredientName and Unit are required.' });
-                return;
-            }
-
             const item = await IngredientService.create({
                 IngredientName: name,
-                Unit: u,
-                Status: status || Status
+                Unit: unit
             });
-            res.status(201).json(item);
+            res.location(`${req.baseUrl}/${item.IngredientId}`).status(201).json(ingredientResponse(item));
         } catch (error) {
             res.status(500).json({ message: 'An internal error occurred.' });
         }

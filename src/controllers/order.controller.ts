@@ -92,14 +92,14 @@ export class OrderController {
     static async getOrdersByStore(req: Request, res: Response): Promise<void> {
         try {
             const storeId = req.user?.idStore;
-            if (!storeId) {
+            if (!storeId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(storeId)) {
                 res.status(401).json({ message: 'Store ID not found in token.' });
                 return;
             }
             const orders = await OrderService.getOrdersByStore(storeId);
             res.json(orders);
-        } catch (error) {
-            res.status(500).json({ message: 'An internal error occurred.' });
+        } catch (error: any) {
+            res.status(500).json({ message: 'An error occurred while retrieving order IDs by store.', error: error.message });
         }
     }
 
