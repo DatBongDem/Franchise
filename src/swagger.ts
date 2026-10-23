@@ -622,6 +622,24 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/order/{id}/cancel': {
+            put: {
+                summary: 'Cancel an order',
+                description: 'Matches C#: any authenticated role can cancel orders except Completed/Canceled. Stores Vietnam time and returns OrderDto. Empty/null reasons are preserved. C# edge case: a null order UserId produces 400 after the cancellation has been saved.',
+                tags: ['Orders'],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: {
+                    type: 'object', properties: { cancellationReason: { type: 'string', nullable: true } }
+                } } } },
+                responses: {
+                    200: { description: 'Updated OrderDto' },
+                    400: { description: 'Invalid input, prohibited order state, or null order UserId after save' },
+                    401: { description: 'Authentication required' },
+                    404: { description: 'Order not found' },
+                    500: { description: 'An error occurred while cancelling the order.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',

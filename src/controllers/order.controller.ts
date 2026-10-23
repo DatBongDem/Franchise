@@ -166,16 +166,31 @@ export class OrderController {
     }
 
     static async cancelOrder(req: Request, res: Response): Promise<void> {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+            res.status(400).json({ message: 'Invalid order ID.' });
+            return;
+        }
+        const body = req.body;
+        const reasonKey = body && typeof body === 'object'
+            ? Object.keys(body).find(key => key.toLowerCase() === 'cancellationreason') : undefined;
+        const reason = reasonKey === undefined ? undefined : body[reasonKey];
+        if (!body || typeof body !== 'object' || Array.isArray(body) || (reason != null && typeof reason !== 'string')) {
+            res.status(400).json({ message: 'CancellationReason must be a string or null.' });
+            return;
+        }
         try {
-            const reason = req.body.cancellationReason || req.body.CancellationReason;
             const order = await OrderService.cancelOrder(req.params.id, reason);
             if (!order) {
-                res.status(404).json({ message: 'Order not found' });
+                res.status(404).json({ message: `Order with ID ${req.params.id} not found.` });
                 return;
             }
             res.json(order);
         } catch (error: any) {
-            res.status(400).json({ message: error.message });
+            if (error instanceof OrderInvalidStateError) {
+                res.status(400).json({ message: error.message });
+                return;
+            }
+            res.status(500).json({ message: 'An error occurred while cancelling the order.', error: error.message });
         }
     }
 
