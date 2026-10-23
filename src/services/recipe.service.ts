@@ -145,25 +145,30 @@ export class RecipeService {
         const recipe = await this.getById(id);
         if (!recipe) return false;
 
-        await execute('UPDATE Recipes SET Description = @desc WHERE RecipeID = @id', {
-            id,
-            desc: dto.Description || ''
-        });
-
-        // Replace ingredients
-        await execute('DELETE FROM RecipeIngredients WHERE RecipeId = @id', { id });
+        // RemoveRangeAsync's first SaveChanges persists description and removals together.
+        await execute(
+            `BEGIN TRY
+                 BEGIN TRANSACTION;
+                 UPDATE Recipes SET Description = @desc WHERE RecipeID = @id;
+                 DELETE FROM RecipeIngredients WHERE RecipeId = @id;
+                 COMMIT TRANSACTION;
+             END TRY
+             BEGIN CATCH
+                 IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+                 THROW;
+             END CATCH`,
+            { id, desc: dto.Description }
+        );
         if (dto.Ingredients && dto.Ingredients.length > 0) {
-            for (const item of dto.Ingredients) {
-                await execute(
-                    `INSERT INTO RecipeIngredients (RecipeId, IngredientId, Quantity)
-                     VALUES (@recipeId, @ingredientId, @quantity)`,
-                    {
-                        recipeId: id,
-                        ingredientId: item.IngredientID,
-                        quantity: item.Quantity
-                    }
-                );
-            }
+            // C# saves the entire replacement collection together, after removing old items.
+            await execute(
+                `INSERT INTO RecipeIngredients (RecipeId, IngredientId, Quantity)
+                 SELECT @recipeId, ingredientId, quantity
+                 FROM OPENJSON(@ingredients) WITH (ingredientId uniqueidentifier, quantity decimal(18,2))`,
+                { recipeId: id, ingredients: JSON.stringify(dto.Ingredients.map(item => ({
+                    ingredientId: item.IngredientID, quantity: item.Quantity
+                }))) }
+            );
         }
 
         return true;
