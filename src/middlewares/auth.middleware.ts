@@ -18,6 +18,29 @@ declare global {
     }
 }
 
+function verifyUser(token: string): AuthenticatedUser {
+    const decoded = jwt.verify(token, config.jwt.secret, {
+        issuer: config.jwt.issuer, audience: config.jwt.audience
+    }) as any;
+    return {
+        id: decoded.sub || decoded.id || decoded.nameid
+            || decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'],
+        email: decoded.email, name: decoded.name,
+        idStore: decoded.IdStore || decoded.idStore,
+        role: decoded['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || decoded.role
+    };
+}
+
+// C# actions without Authorize still receive a valid principal when a token is present.
+export function optionalAuthMiddleware(req: Request, res: Response, next: NextFunction): void {
+    const header = req.headers.authorization;
+    if (header?.startsWith('Bearer ')) {
+        try { req.user = verifyUser(header.substring(7).trim()); }
+        catch { req.user = undefined; }
+    }
+    next();
+}
+
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -28,19 +51,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     const token = authHeader.substring(7).trim();
 
     try {
-        const decoded = jwt.verify(token, config.jwt.secret, {
-            issuer: config.jwt.issuer,
-            audience: config.jwt.audience
-        }) as any;
-
-        req.user = {
-            id: decoded.sub || decoded.id || decoded.nameid
-                || decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'],
-            email: decoded.email,
-            name: decoded.name,
-            idStore: decoded.IdStore || decoded.idStore,
-            role: decoded['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || decoded.role
-        };
+        req.user = verifyUser(token);
 
         next();
     } catch (err: any) {

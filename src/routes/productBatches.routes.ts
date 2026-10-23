@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { ProductBatchesController } from '../controllers/productBatches.controller';
-import { authMiddleware } from '../middlewares/auth.middleware';
+import { authMiddleware, optionalAuthMiddleware } from '../middlewares/auth.middleware';
 
 const router = Router();
 
@@ -11,7 +11,7 @@ router.get('/inventory/expired-by-date/:date', authMiddleware, ProductBatchesCon
 router.get('/products/:productId/batches', authMiddleware, ProductBatchesController.getProductBatchesByProductId);
 
 // Store-specific inventory & shrinkage
-router.get('/:storeId/shrinkage', authMiddleware, ProductBatchesController.getStoreShrinkage);
+router.get('/:storeId/shrinkage', optionalAuthMiddleware, ProductBatchesController.getStoreShrinkage);
 router.get('/:storeId/inventory', authMiddleware, ProductBatchesController.getStoreInventory);
 
 // Product batch in order CRUD
