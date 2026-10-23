@@ -585,6 +585,21 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/productbatches/{storeId}/shrinkage': {
+            get: {
+                summary: 'Get store shrinkage at cost price',
+                description: 'Matches C#: the database user must be MANAGER of this store. Uses remaining quantity times Product.Price, grouped by product and expiry date. Only non-null expiry strictly before UTC now and positive remaining stock qualify; order status is not filtered. Sorted by expiredDate then productName.',
+                tags: ['Warehouse'],
+                parameters: [{ name: 'storeId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                responses: {
+                    200: { description: 'data.summary: storeId, calculatedAt, totalExpiredQuantity, totalLossAmount; data.items: storeId, productId, productName, expiredQuantity, lossAmount, expiredDate' },
+                    400: { description: 'Invalid store ID' },
+                    403: { description: 'Missing/invalid token user ID or no permission for this store' },
+                    404: { description: 'User not found' },
+                    500: { description: 'An internal error occurred.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',
