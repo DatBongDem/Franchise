@@ -396,6 +396,27 @@ const swaggerDocument = {
             }
         },
         '/api/recipe/{id}': {
+            put: {
+                summary: 'Update recipe description and replace ingredients',
+                description: 'Matches C#: ProductId is bound but not changed. Empty/omitted ingredients clear the recipe. Description and removal of old ingredients are saved first; the replacement collection is saved next. If replacement insertion fails, the first save remains committed.',
+                tags: ['Recipes'],
+                security: [],
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+                requestBody: { required: true, content: { 'application/json': { schema: {
+                    type: 'object', required: ['description'], properties: {
+                        productId: { type: 'string', format: 'uuid' }, description: { type: 'string' },
+                        ingredients: { type: 'array', items: { type: 'object', properties: {
+                            ingredientID: { type: 'string', format: 'uuid' }, quantity: { type: 'number' }
+                        } } }
+                    }
+                } } } },
+                responses: {
+                    200: { description: 'Recipe updated successfully' },
+                    400: { description: 'Invalid recipe ID or DTO' },
+                    404: { description: 'Recipe not found' },
+                    500: { description: 'Recipe update failed, including invalid replacement references or duplicate ingredients' }
+                }
+            },
             get: {
                 summary: 'Get recipe by ID',
                 description: 'Returns the C# Recipe shape. recipeIngredients is empty because this endpoint does not load the navigation collection.',
