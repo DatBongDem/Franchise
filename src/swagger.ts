@@ -600,6 +600,28 @@ const swaggerDocument = {
                 }
             }
         },
+        '/api/bills/billingHistory/{storeId}': {
+            get: {
+                summary: 'Get billing history for a store',
+                description: 'Matches C#: database user must be MANAGER of this store. Filters CreatedTime inclusively. data contains billId, createdTime, totalAmount and details; each detail contains billDetailId, productId, productName, quantity, unitPrice and totalPrice. Products are resolved through the sold batch.',
+                tags: ['Bills'],
+                parameters: [
+                    { name: 'storeId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+                    { name: 'FromDate', in: 'query', schema: { type: 'string', format: 'date-time' } },
+                    { name: 'ToDate', in: 'query', schema: { type: 'string', format: 'date-time' } },
+                    { name: 'PageNumber', in: 'query', schema: { type: 'integer', default: 1 } },
+                    { name: 'PageSize', in: 'query', schema: { type: 'integer', default: 10 } }
+                ],
+                responses: {
+                    200: { description: 'Billing history with totalRecords, pageNumber, pageSize and data' },
+                    400: { description: 'Invalid store ID, date or pagination' },
+                    401: { description: 'Authentication required' },
+                    403: { description: 'No permission or invalid token user ID' },
+                    404: { description: 'User not found' },
+                    500: { description: 'An internal error occurred.' }
+                }
+            }
+        },
         '/api/bills': {
             post: {
                 summary: 'Create Bill with FIFO Inventory Deduction',
