@@ -287,17 +287,27 @@ export class OrderService {
         const order = await this.getOrderById(orderId);
         if (!order) return null;
         if (order.Status === StatusEnum.Completed || order.Status === StatusEnum.Canceled) {
-            throw new Error(`Order in status '${order.Status}' cannot be cancelled.`);
+            throw new OrderInvalidStateError(`Order in status '${order.Status}' cannot be cancelled.`);
         }
 
+        const cancelledTime = new Date(Date.now() + 7 * 60 * 60 * 1000);
         await execute(
             `UPDATE Orders
              SET Status = @status, CancellationReason = @reason, CancelledTime = @now
              WHERE OrderId = @orderId`,
-            { orderId, status: StatusEnum.Canceled, reason: cancellationReason || null, now: new Date() }
+            { orderId, status: StatusEnum.Canceled, reason: cancellationReason ?? null, now: cancelledTime }
         );
 
-        return await this.getOrderById(orderId);
+        // C# casts nullable UserId to Guid while mapping, after saving the cancellation.
+        if (order.UserId == null) throw new OrderInvalidStateError('Nullable object must have a value.');
+        return {
+            orderId: order.OrderId, userId: order.UserId, storeId: order.StoreId,
+            totalAmount: order.TotalAmount, status: StatusEnum.Canceled, type: order.Type, note: order.Note,
+            sentTime: order.SentTime, pickedUpTime: order.PickedUpTime, kitchenReceivedTime: order.KitchenReceivedTime,
+            cookingTime: order.CookingTime, cookedTime: order.CookedTime, takenFromKitchenTime: order.TakenFromKitchenTime,
+            arrivedTime: order.ArrivedTime, completedTime: order.CompletedTime, cancelledTime,
+            cancellationReason: cancellationReason ?? null, feedback: order.Feedback
+        };
     }
 
     static async getOrdersHistoryAtStore(
