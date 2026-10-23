@@ -88,7 +88,7 @@ Mặc định khi cài đặt SQL Server Express, giao thức **TCP/IP** bị t�
 
 ---
 
-## 5. Danh Sách 11 Nhóm API (Tương Ứng 100% Code C# Gốc)
+## 5. Danh Sách 11 Nhóm API 
 
 1. **Users (`/api/users`)**: Login, Logout, /whoami, /me, CRUD người dùng, khóa/mở khóa tài khoản, upload avatar.
 2. **Store (`/api/store`)**: CRUD chi nhánh cửa hàng, tự động tạo định mức cho sản phẩm.

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { ProductBatchService } from '../services/productBatch.service';
+import { ProductBatchService, ShrinkageAccessError, ShrinkageUserNotFoundError } from '../services/productBatch.service';
 import { WarehouseService } from '../services/warehouse.service';
 
 export class ProductBatchesController {
@@ -50,15 +50,27 @@ export class ProductBatchesController {
     }
 
     static async getStoreShrinkage(req: Request, res: Response): Promise<void> {
+        const isGuid = (value: unknown): value is string => typeof value === 'string'
+            && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+        if (!isGuid(req.params.storeId)) {
+            res.status(400).json({ message: 'Invalid store ID.' });
+            return;
+        }
         try {
-            const result = await ProductBatchService.getStoreShrinkage(req.user?.id || '', req.params.storeId);
+            if (!isGuid(req.user?.id)) {
+                res.status(403).json({ message: 'User ID not found in token.' });
+                return;
+            }
+            const result = await ProductBatchService.getStoreShrinkage(req.user.id, req.params.storeId);
             res.json({
                 status: 0,
                 data: result,
                 message: result.items.length > 0 ? 'Get store shrinkage successfully' : 'No expired products found'
             });
         } catch (error: any) {
-            res.status(500).json({ message: 'An internal error occurred.' });
+            if (error instanceof ShrinkageAccessError) { res.status(403).json({ message: error.message }); return; }
+            if (error instanceof ShrinkageUserNotFoundError) { res.status(404).json({ message: error.message }); return; }
+            res.status(500).json('An internal error occurred.');
         }
     }
 

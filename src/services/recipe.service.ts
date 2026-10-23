@@ -16,12 +16,43 @@ export interface RecipeDto {
 }
 
 export class RecipeService {
-    static async getAll(): Promise<any[]> {
-        return await query(
-            `SELECT r.*, p.ProductName
-             FROM Recipes r
-             LEFT JOIN Products p ON r.ProductID = p.ProductId`
+    static async getRecipeById(id: string): Promise<any | null> {
+        const recipe = await queryOne(
+            'SELECT RecipeID, ProductID, Description FROM Recipes WHERE RecipeID = @id', { id }
         );
+        if (!recipe) return null;
+        return {
+            recipeID: recipe.RecipeID,
+            productID: recipe.ProductID,
+            description: recipe.Description,
+            // C# GetByIdAsync does not Include the navigation collection.
+            recipeIngredients: []
+        };
+    }
+
+    // The read endpoint uses RecipeResponseDto.
+    static async getDetailsById(id: string): Promise<any | null> {
+        const recipe = await queryOne('SELECT RecipeID, Description FROM Recipes WHERE RecipeID = @id', { id });
+        if (!recipe) return null;
+        const ingredients = await query(
+            'SELECT IngredientId, Quantity FROM RecipeIngredients WHERE RecipeId = @id', { id }
+        );
+        return {
+            recipeID: recipe.RecipeID,
+            description: recipe.Description,
+            ingredients: ingredients.map(item => ({ ingredientID: item.IngredientId, quantity: item.Quantity }))
+        };
+    }
+
+    static async getAll(): Promise<any[]> {
+        const recipes = await query('SELECT RecipeID, ProductID, Description FROM Recipes');
+        return recipes.map(recipe => ({
+            recipeID: recipe.RecipeID,
+            productID: recipe.ProductID,
+            description: recipe.Description,
+            // GetAllAsync does not Include the C# navigation collection.
+            recipeIngredients: []
+        }));
     }
 
     static async getById(id: string): Promise<any | null> {
@@ -72,6 +103,18 @@ export class RecipeService {
             throw new Error('Recipe must have at least one ingredient');
         }
 
+        const ingredientIds = dto.Ingredients.map(item => item.IngredientID.toLowerCase());
+        if (new Set(ingredientIds).size !== ingredientIds.length) {
+            throw new Error('Duplicate ingredient detected');
+        }
+        // Match C#: validate every ingredient before inserting the recipe or its details.
+        for (const item of dto.Ingredients) {
+            const ingredient = await queryOne('SELECT IngredientId FROM Ingredients WHERE IngredientId = @id', {
+                id: item.IngredientID
+            });
+            if (!ingredient) throw new Error(`Ingredient with ID ${item.IngredientID} not found`);
+        }
+
         const recipeId = uuidv4();
         await execute(
             `INSERT INTO Recipes (RecipeID, ProductID, Description)
@@ -79,7 +122,7 @@ export class RecipeService {
             {
                 recipeId,
                 productId: dto.ProductId,
-                description: dto.Description || ''
+                description: dto.Description
             }
         );
 
@@ -95,32 +138,37 @@ export class RecipeService {
             );
         }
 
-        return await this.getWithIngredientsById(recipeId);
+        return { RecipeID: recipeId };
     }
 
     static async update(id: string, dto: RecipeDto): Promise<boolean> {
         const recipe = await this.getById(id);
         if (!recipe) return false;
 
-        await execute('UPDATE Recipes SET Description = @desc WHERE RecipeID = @id', {
-            id,
-            desc: dto.Description || ''
-        });
-
-        // Replace ingredients
-        await execute('DELETE FROM RecipeIngredients WHERE RecipeId = @id', { id });
+        // RemoveRangeAsync's first SaveChanges persists description and removals together.
+        await execute(
+            `BEGIN TRY
+                 BEGIN TRANSACTION;
+                 UPDATE Recipes SET Description = @desc WHERE RecipeID = @id;
+                 DELETE FROM RecipeIngredients WHERE RecipeId = @id;
+                 COMMIT TRANSACTION;
+             END TRY
+             BEGIN CATCH
+                 IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+                 THROW;
+             END CATCH`,
+            { id, desc: dto.Description }
+        );
         if (dto.Ingredients && dto.Ingredients.length > 0) {
-            for (const item of dto.Ingredients) {
-                await execute(
-                    `INSERT INTO RecipeIngredients (RecipeId, IngredientId, Quantity)
-                     VALUES (@recipeId, @ingredientId, @quantity)`,
-                    {
-                        recipeId: id,
-                        ingredientId: item.IngredientID,
-                        quantity: item.Quantity
-                    }
-                );
-            }
+            // C# saves the entire replacement collection together, after removing old items.
+            await execute(
+                `INSERT INTO RecipeIngredients (RecipeId, IngredientId, Quantity)
+                 SELECT @recipeId, ingredientId, quantity
+                 FROM OPENJSON(@ingredients) WITH (ingredientId uniqueidentifier, quantity decimal(18,2))`,
+                { recipeId: id, ingredients: JSON.stringify(dto.Ingredients.map(item => ({
+                    ingredientId: item.IngredientID, quantity: item.Quantity
+                }))) }
+            );
         }
 
         return true;
@@ -128,6 +176,7 @@ export class RecipeService {
 
     static async delete(id: string): Promise<boolean> {
         const result = await execute('DELETE FROM Recipes WHERE RecipeID = @id', { id });
-        return (result.rowsAffected[0] || 0) > 0;
+        if (!(result.rowsAffected[0] > 0)) throw new Error(`Not found Recipe with Id: ${id}`);
+        return true;
     }
 }

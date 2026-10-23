@@ -42,7 +42,7 @@ export class StoreService {
         return (await this.getById(storeId))!;
     }
 
-    static async update(id: string, dto: { StoreName: string; Address?: string }): Promise<boolean> {
+    static async update(id: string, dto: { StoreName: string; Address?: string | null }): Promise<boolean> {
         const store = await this.getById(id);
         if (!store) return false;
 
@@ -51,7 +51,7 @@ export class StoreService {
             {
                 id,
                 storeName: dto.StoreName,
-                address: dto.Address ?? store.Address
+                address: dto.Address ?? null
             }
         );
         return true;

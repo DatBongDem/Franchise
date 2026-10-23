@@ -1,21 +1,28 @@
 import { query, queryOne, execute } from '../config/db';
 
 export interface QuantitativeDto {
-    StoreId: string;
-    ProductId: string;
-    ProductName: string;
-    Quantity: number;
+    storeId: string;
+    productId: string;
+    productName: string;
+    quantity: number;
 }
 
 export class QuantitativeService {
     static async getByStoreId(storeId: string): Promise<QuantitativeDto[]> {
-        return await query(
-            `SELECT q.StoreId, q.ProductId, q.Quantity, p.ProductName
+        const rows = await query(
+            `SELECT q.StoreId, q.ProductId, q.Quantity,
+                    CASE WHEN p.ProductId IS NULL THEN N'Unknown Product' ELSE p.ProductName END AS ProductName
              FROM Quantitatives q
-             JOIN Products p ON q.ProductId = p.ProductId
-             WHERE q.StoreId = @storeId AND p.isDeleted = 0`,
+             LEFT JOIN Products p ON q.ProductId = p.ProductId
+             WHERE q.StoreId = @storeId`,
             { storeId }
         );
+        return rows.map(row => ({
+            storeId: row.StoreId,
+            productId: row.ProductId,
+            productName: row.ProductName,
+            quantity: row.Quantity
+        }));
     }
 
     static async update(storeId: string, productId: string, quantity: number): Promise<boolean> {
@@ -25,12 +32,7 @@ export class QuantitativeService {
         );
 
         if (!existing) {
-            // If doesn't exist yet, insert
-            await execute(
-                'INSERT INTO Quantitatives (StoreId, ProductId, Quantity) VALUES (@storeId, @productId, @quantity)',
-                { storeId, productId, quantity }
-            );
-            return true;
+            return false;
         }
 
         await execute(

@@ -2,6 +2,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { getPool, query, queryOne, execute, sql } from '../config/db';
 import { StatusEnum } from '../constants/status.enum';
 
+export class RevenueAccessError extends Error {}
+export class RevenueUserNotFoundError extends Error {}
+export class RevenueInputError extends Error {}
+export class BillingHistoryAccessError extends Error {}
+export class BillingHistoryUserNotFoundError extends Error {}
+
 export interface CreateBillItemRequest {
     ProductId: string;
     Quantity: number;
@@ -147,40 +153,56 @@ export class BillingService {
     }
 
     static async getBillingHistoryAtStore(
+        userId: string,
         storeId: string,
         pageNumber: number = 1,
         pageSize: number = 10,
-        fromDate?: string,
-        toDate?: string
+        fromDate?: Date,
+        toDate?: Date
     ): Promise<{ listBills: any[]; totalRecords: number }> {
-        const offset = (pageNumber - 1) * pageSize;
-        const total = await queryOne(
-            `SELECT COUNT(*) AS count FROM Bills WHERE StoreId = @storeId`,
-            { storeId }
-        );
-
-        const bills = await query(
-            `SELECT b.*, u.Name AS StaffName
-             FROM Bills b
-             JOIN Users u ON b.UserId = u.Id
-             WHERE b.StoreId = @storeId
-             ORDER BY b.CreatedTime DESC
-             OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY`,
-            { storeId, offset, pageSize }
-        );
-
-        // Fetch details for bills
-        for (const b of bills) {
-            b.Details = await query(
-                `SELECT bd.*, p.ProductName
-                 FROM BillDetails bd
-                 JOIN Products p ON bd.ProductId = p.ProductId
-                 WHERE bd.BillId = @billId`,
-                { billId: b.BillId }
-            );
+        const user = await queryOne('SELECT Id, Role, IdStore FROM Users WHERE Id = @userId', { userId });
+        if (!user) throw new BillingHistoryUserNotFoundError('User not found');
+        if (user.Role !== 'MANAGER' || user.IdStore?.toLowerCase() !== storeId.toLowerCase()) {
+            throw new BillingHistoryAccessError('User does not have permission!!!');
         }
-
-        return { listBills: bills, totalRecords: total?.count || 0 };
+        let predicate = 'StoreId = @storeId';
+        const filters: Record<string, any> = { storeId };
+        if (fromDate) { predicate += ' AND CreatedTime >= @fromDate'; filters.fromDate = fromDate; }
+        if (toDate) { predicate += ' AND CreatedTime <= @toDate'; filters.toDate = toDate; }
+        const total = await queryOne(`SELECT COUNT(*) AS count FROM Bills WHERE ${predicate}`, filters);
+        const offset = (pageNumber - 1) * pageSize;
+        const bills = pageSize === 0 ? [] : await query(
+            `SELECT BillId, CreatedTime, TotalAmount FROM Bills WHERE ${predicate}
+             ORDER BY CreatedTime DESC
+             OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY`,
+            { ...filters, offset, pageSize }
+        );
+        if (bills.length === 0) return { listBills: [], totalRecords: total?.count ?? 0 };
+        const details = await query(
+            `SELECT bd.BillId, bd.BillDetailId, pb.ProductId, p.ProductName, bd.Quantity, bd.UnitPrice, bd.TotalPrice
+             FROM BillDetails bd
+             JOIN ProductBatches pb ON bd.BatchId = pb.BatchId
+             JOIN Products p ON pb.ProductId = p.ProductId
+             WHERE bd.BillId IN (SELECT BillId FROM OPENJSON(@billIds) WITH (BillId uniqueidentifier '$'))`,
+            { billIds: JSON.stringify(bills.map(bill => bill.BillId)) }
+        );
+        const detailsByBill = new Map<string, any[]>();
+        for (const detail of details) {
+            const key = detail.BillId.toLowerCase();
+            const items = detailsByBill.get(key) ?? [];
+            items.push({
+                billDetailId: detail.BillDetailId, productId: detail.ProductId, productName: detail.ProductName,
+                quantity: detail.Quantity, unitPrice: detail.UnitPrice, totalPrice: detail.TotalPrice
+            });
+            detailsByBill.set(key, items);
+        }
+        return {
+            listBills: bills.map(bill => ({
+                billId: bill.BillId, createdTime: bill.CreatedTime, totalAmount: bill.TotalAmount,
+                details: detailsByBill.get(bill.BillId.toLowerCase()) ?? []
+            })),
+            totalRecords: total?.count ?? 0
+        };
     }
 
     static async getBillingHistoryByStaff(
@@ -217,37 +239,55 @@ export class BillingService {
         return { listBills: bills, totalRecords: total?.count || 0 };
     }
 
-    static async getStoreRevenue(storeId: string, dateStr: string, endDateStr?: string): Promise<any> {
-        const fromDate = new Date(dateStr);
-        const toDate = endDateStr ? new Date(endDateStr) : new Date(dateStr);
-        toDate.setDate(toDate.getDate() + 1); // Inclusive
+    static async getStoreRevenue(userId: string, storeId: string, date?: Date, endDate?: Date): Promise<any> {
+        const user = await queryOne('SELECT Id, Role, IdStore FROM Users WHERE Id = @userId', { userId });
+        if (!user) throw new RevenueUserNotFoundError('User not found');
+        if (user.Role !== 'MANAGER' || user.IdStore?.toLowerCase() !== storeId.toLowerCase()) {
+            throw new RevenueAccessError('User does not have permission');
+        }
+        if (!date) throw new RevenueInputError('Date is required');
+        if (endDate && endDate < date) throw new RevenueInputError('EndDate must be greater than or equal to Date');
 
-        const summary = await queryOne(
-            `SELECT COUNT(*) AS TotalBills, ISNULL(SUM(TotalAmount), 0) AS TotalRevenue
-             FROM Bills
-             WHERE StoreId = @storeId AND CreatedTime >= @fromDate AND CreatedTime < @toDate`,
-            { storeId, fromDate, toDate }
-        );
-
+        const fromDate = new Date(date);
+        fromDate.setUTCHours(0, 0, 0, 0);
+        const toDate = new Date(endDate ?? date);
+        toDate.setUTCHours(0, 0, 0, 0);
+        toDate.setUTCDate(toDate.getUTCDate() + 1);
+        // Keep money arithmetic in SQL decimal, including the sums of grouped values.
         const productSales = await query(
-            `SELECT p.ProductId, p.ProductName, SUM(bd.Quantity) AS TotalQuantitySold, SUM(bd.TotalPrice) AS TotalRevenue
-             FROM BillDetails bd
-             JOIN Bills b ON bd.BillId = b.BillId
-             JOIN Products p ON bd.ProductId = p.ProductId
-             WHERE b.StoreId = @storeId AND b.CreatedTime >= @fromDate AND b.CreatedTime < @toDate
-             GROUP BY p.ProductId, p.ProductName
-             ORDER BY TotalRevenue DESC`,
+            `WITH ProductRevenue AS (
+                SELECT b.StoreId, pb.ProductId, p.ProductName, MIN(b.CreatedTime) AS SaleDate,
+                       SUM(bd.Quantity) AS TotalQuantitySold,
+                       CAST(SUM(bd.Quantity * bd.UnitPrice) AS decimal(28,2)) AS TotalRevenue,
+                       CAST(SUM(bd.Quantity * p.Price) AS decimal(28,2)) AS TotalCost,
+                       CAST(SUM(bd.Quantity * bd.UnitPrice) AS decimal(28,2))
+                         - CAST(SUM(bd.Quantity * p.Price) AS decimal(28,2)) AS Profit
+                FROM Bills b
+                JOIN BillDetails bd ON b.BillId = bd.BillId
+                JOIN ProductBatches pb ON bd.BatchId = pb.BatchId
+                JOIN Products p ON pb.ProductId = p.ProductId
+                WHERE b.StoreId = @storeId AND b.CreatedTime >= @fromDate AND b.CreatedTime < @toDate
+                GROUP BY b.StoreId, pb.ProductId, p.ProductName
+             )
+             SELECT *, SUM(TotalRevenue) OVER () AS SummaryTotalRevenue,
+                       SUM(TotalCost) OVER () AS SummaryTotalCost,
+                       SUM(Profit) OVER () AS SummaryTotalProfit
+             FROM ProductRevenue`,
             { storeId, fromDate, toDate }
         );
 
         return {
-            storeId,
-            fromDate,
-            toDate,
-            totalBills: summary?.TotalBills || 0,
-            totalRevenue: summary?.TotalRevenue || 0,
-            averageBillValue: summary?.TotalBills ? summary.TotalRevenue / summary.TotalBills : 0,
-            products: productSales
+            summary: {
+                saleDate: fromDate,
+                totalRevenue: productSales[0]?.SummaryTotalRevenue ?? 0,
+                totalCost: productSales[0]?.SummaryTotalCost ?? 0,
+                totalProfit: productSales[0]?.SummaryTotalProfit ?? 0
+            },
+            items: productSales.map(item => ({
+                storeId: item.StoreId, saleDate: item.SaleDate, productId: item.ProductId,
+                productName: item.ProductName, totalQuantitySold: item.TotalQuantitySold,
+                totalRevenue: item.TotalRevenue, totalCost: item.TotalCost, profit: item.Profit
+            }))
         };
     }
 }

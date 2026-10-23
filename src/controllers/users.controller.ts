@@ -40,7 +40,8 @@ export class UsersController {
 
     static async getMe(req: Request, res: Response): Promise<void> {
         try {
-            if (!req.user) {
+            if (!req.user || typeof req.user.id !== 'string'
+                || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.user.id)) {
                 res.status(401).json({ message: 'User ID not found in token.' });
                 return;
             }
@@ -51,7 +52,19 @@ export class UsersController {
                 return;
             }
 
-            res.json(user);
+            res.json({
+                id: user.Id,
+                gmail: user.Gmail,
+                name: user.Name,
+                gender: user.Gender,
+                dateOfBirth: user.DateOfBirth,
+                address: user.Address,
+                phoneNumber: user.PhoneNumber,
+                role: user.Role,
+                idStore: user.IdStore,
+                avatar: user.Avatar,
+                status: user.Status
+            });
         } catch (error) {
             res.status(500).json({ message: 'An internal error occurred.' });
         }
@@ -60,20 +73,48 @@ export class UsersController {
     static async getAll(req: Request, res: Response): Promise<void> {
         try {
             const users = await UserService.getAllUsers();
-            res.json(users);
+            res.json(users.map(user => ({
+                id: user.Id,
+                gmail: user.Gmail,
+                name: user.Name,
+                gender: user.Gender,
+                dateOfBirth: user.DateOfBirth,
+                address: user.Address,
+                phoneNumber: user.PhoneNumber,
+                role: user.Role,
+                idStore: user.IdStore,
+                avatar: user.Avatar,
+                status: user.Status
+            })));
         } catch (error) {
             res.status(500).json({ message: 'An internal error occurred.' });
         }
     }
 
     static async getById(req: Request, res: Response): Promise<void> {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+            res.status(404).send();
+            return;
+        }
         try {
             const user = await UserService.getUserById(req.params.id);
             if (!user) {
-                res.status(404).json({ message: 'User not found.' });
+                res.status(404).send();
                 return;
             }
-            res.json(user);
+            res.json({
+                id: user.Id,
+                gmail: user.Gmail,
+                name: user.Name,
+                gender: user.Gender,
+                dateOfBirth: user.DateOfBirth,
+                address: user.Address,
+                phoneNumber: user.PhoneNumber,
+                role: user.Role,
+                idStore: user.IdStore,
+                avatar: user.Avatar,
+                status: user.Status
+            });
         } catch (error) {
             res.status(500).json({ message: 'An internal error occurred.' });
         }
@@ -116,13 +157,21 @@ export class UsersController {
     }
 
     static async toggleStatus(req: Request, res: Response): Promise<void> {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+            // The C# {id:guid} route does not match an invalid ID.
+            res.status(404).send();
+            return;
+        }
         try {
             const newStatus = await UserService.toggleUserStatus(req.params.id);
             if (!newStatus) {
-                res.status(404).json({ message: 'User not found.' });
+                res.status(404).send();
                 return;
             }
-            res.json({ status: newStatus });
+            res.json({
+                message: newStatus === 'Blocked' ? 'Account has been blocked.' : 'Account has been recovered.',
+                status: newStatus
+            });
         } catch (error) {
             res.status(500).json({ message: 'An internal error occurred.' });
         }

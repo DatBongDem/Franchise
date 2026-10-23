@@ -2,6 +2,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { query, queryOne, execute } from '../config/db';
 import { StatusEnum } from '../constants/status.enum';
 
+export class ShrinkageAccessError extends Error {}
+export class ShrinkageUserNotFoundError extends Error {}
+
 export class ProductBatchService {
     static async createProductBatch(dto: { ProductId: string; QualityOrder: number }, storeId: string): Promise<any> {
         const creatingOrder = await queryOne(
@@ -100,39 +103,39 @@ export class ProductBatchService {
     }
 
     static async getStoreShrinkage(userId: string, storeId: string): Promise<any> {
-        const now = new Date();
+        const user = await queryOne('SELECT Id, Role, IdStore FROM Users WHERE Id = @userId', { userId });
+        if (!user) throw new ShrinkageUserNotFoundError('User not found');
+        if (user.Role !== 'MANAGER' || user.IdStore?.toLowerCase() !== storeId.toLowerCase()) {
+            throw new ShrinkageAccessError('User does not have permission');
+        }
+        const now = new Date(Date.now());
         const expiredBatches = await query(
-            `SELECT pb.*, p.ProductName, p.Unit, p.SellingPrice, o.StoreId
-             FROM ProductBatches pb
-             JOIN Products p ON pb.ProductId = p.ProductId
-             JOIN Orders o ON pb.OrderId = o.OrderId
-             WHERE o.StoreId = @storeId
-               AND o.Status = @completedStatus
-               AND pb.Expiry <= @now
-               AND pb.RemainingQuantity > 0`,
-            { storeId, completedStatus: StatusEnum.Completed, now }
+            `WITH Shrinkage AS (
+                SELECT o.StoreId, pb.ProductId, p.ProductName, CAST(pb.Expiry AS date) AS ExpiredDate,
+                       SUM(pb.RemainingQuantity) AS ExpiredQuantity,
+                       CAST(SUM(pb.RemainingQuantity * p.Price) AS decimal(28,2)) AS LossAmount
+                FROM ProductBatches pb
+                JOIN Products p ON pb.ProductId = p.ProductId
+                JOIN Orders o ON pb.OrderId = o.OrderId
+                WHERE o.StoreId = @storeId AND pb.Expiry IS NOT NULL
+                  AND pb.Expiry < @now AND pb.RemainingQuantity > 0
+                GROUP BY o.StoreId, pb.ProductId, p.ProductName, CAST(pb.Expiry AS date)
+             )
+             SELECT *, SUM(ExpiredQuantity) OVER () AS TotalExpiredQuantity,
+                       SUM(LossAmount) OVER () AS TotalLossAmount
+             FROM Shrinkage ORDER BY ExpiredDate, ProductName`,
+            { storeId, now }
         );
-
-        let totalLoss = 0;
-        const items = expiredBatches.map(b => {
-            const lossAmount = b.RemainingQuantity * (b.SellingPrice || 0);
-            totalLoss += lossAmount;
-            return {
-                batchId: b.BatchId,
-                productId: b.ProductId,
-                productName: b.ProductName,
-                unit: b.Unit,
-                expiredQuantity: b.RemainingQuantity,
-                unitPrice: b.SellingPrice,
-                lossAmount,
-                expiryDate: b.Expiry
-            };
-        });
-
         return {
-            storeId,
-            totalLoss,
-            items
+            summary: {
+                storeId, calculatedAt: now,
+                totalExpiredQuantity: expiredBatches[0]?.TotalExpiredQuantity ?? 0,
+                totalLossAmount: expiredBatches[0]?.TotalLossAmount ?? 0
+            },
+            items: expiredBatches.map(item => ({
+                storeId: item.StoreId, productId: item.ProductId, productName: item.ProductName,
+                expiredQuantity: item.ExpiredQuantity, lossAmount: item.LossAmount, expiredDate: item.ExpiredDate
+            }))
         };
     }
 }

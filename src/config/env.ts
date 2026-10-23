@@ -7,9 +7,10 @@ export const config = {
         server: process.env.DB_SERVER || 'localhost',
         port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : undefined,
         instanceName: process.env.DB_INSTANCE || undefined,
-        user: process.env.DB_USER || 'franchise_user',
-        password: process.env.DB_PASSWORD || 'Password123!',
+        user: process.env.DB_USER || '',
+        password: process.env.DB_PASSWORD || '',
         database: process.env.DB_NAME || 'FranchiseDB',
+        trustedConnection: process.env.DB_TRUSTED === 'true'
     },
     jwt: {
         secret: process.env.JWT_SECRET || 'franchise_store_secret_jwt_key_2026_very_long_string_123456',
