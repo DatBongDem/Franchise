@@ -1,6 +1,6 @@
 # FranchiseStore API - Node.js Express (SQL Server)
 
-Hệ thống Backend quản lý chuỗi cửa hàng nhượng quyền (Franchise Store), được chuyển đổi từ C# ASP.NET Core sang **Node.js (Express + TypeScript)** và sử dụng **SQL Server Local**.
+Hệ thống Backend quản lý chuỗi cửa hàng nhượng quyền (Franchise Store), **Node.js (Express + TypeScript)** và sử dụng **SQL Server Local**.
 
 ---
 
