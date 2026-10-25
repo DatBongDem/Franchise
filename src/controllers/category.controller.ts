@@ -62,11 +62,14 @@ export class CategoryController {
             if (category) {
                 res.json({
                     status: 0,
-                    category,
+                    category: {
+                        categoryId: (category as any).CategoryId,
+                        categoryName: (category as any).Name
+                    },
                     message: 'Get Category Successfully!!!'
                 });
             } else {
-                res.status(400).json({
+                res.status(404).json({
                     status: -1,
                     message: 'Category does not exist!!!'
                 });
@@ -79,18 +82,16 @@ export class CategoryController {
     static async getAll(req: Request, res: Response): Promise<void> {
         try {
             const categories = await CategoryService.getAll();
-            if (categories && categories.length > 0) {
-                res.json({
-                    status: 0,
-                    category: categories,
-                    message: 'Get Category Successfully!!!'
-                });
-            } else {
-                res.status(400).json({
-                    status: -1,
-                    message: 'Does not any category!!!'
-                });
-            }
+            // Map to camelCase fields that frontend expects
+            const mapped = categories.map((c: any) => ({
+                categoryId: c.CategoryId,
+                categoryName: c.Name
+            }));
+            res.json({
+                status: 0,
+                category: mapped,
+                message: mapped.length > 0 ? 'Get Category Successfully!!!' : 'No categories found'
+            });
         } catch (error) {
             res.status(500).json({ message: 'An internal error occurred.' });
         }
